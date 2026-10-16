@@ -10,8 +10,8 @@ function savePin(root, pin) {
   const filename = path.join(root, '.env');
   if (fs.existsSync(filename) && fs.lstatSync(filename).isSymbolicLink()) throw new Error('심볼릭 링크 .env는 직접 관리하세요.');
   const previous = fs.existsSync(filename) ? fs.readFileSync(filename, 'utf8') : '';
-  const lines = previous.split(/\r?\n/).filter(line => !/^\s*DO_CONTROL_(?:PIN|ENABLED)\s*=/.test(line));
-  const content = lines.join('\n').replace(/\n*$/, '') + `\nDO_CONTROL_ENABLED=true\nDO_CONTROL_PIN=${pin}\n`;
+  const lines = previous.split(/\r?\n/).filter(line => !/^\s*DO_CONTROL_(?:PIN|PIN_REQUIRED|ENABLED)\s*=/.test(line));
+  const content = lines.join('\n').replace(/\n*$/, '') + `\nDO_CONTROL_ENABLED=true\nDO_CONTROL_PIN_REQUIRED=true\nDO_CONTROL_PIN=${pin}\n`;
   const temporary = filename + '.' + crypto.randomBytes(8).toString('hex');
   try {
     fs.writeFileSync(temporary, content, { flag: 'wx', mode: 0o600 });

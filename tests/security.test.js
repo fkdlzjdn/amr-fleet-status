@@ -28,6 +28,7 @@ test('PIN setup preserves SSH settings, replaces only control settings, and stor
   const env = {}; loadEnv(file, env);
   assert.equal(env.PORT, '3100'); assert.equal(env.FLEET_SSH_KEY, '/example/robot_key');
   assert.equal(env.DO_CONTROL_PIN, testPin); assert.equal(env.DO_CONTROL_ENABLED, 'true');
+  assert.equal(env.DO_CONTROL_PIN_REQUIRED, 'true');
   assert.equal(fs.statSync(file).mode & 0o777, 0o600);
   const content = fs.readFileSync(file, 'utf8');
   assert.equal((content.match(/^DO_CONTROL_PIN=/gm) || []).length, 1);
@@ -101,6 +102,35 @@ test('charging endpoint requires PIN and chooses only charge_relay on the server
   await f.post('lock', v.token);
   assert.equal((await f.post('charge', v.token, charge)).status, 403); assert.equal(f.calls, 1);
   await v.close();
+});
+
+test('PIN-optional mode permits DO and charging without unlock while retaining origin and live-view checks', async t => {
+  const guard = new DoControl({ DO_CONTROL_ENABLED: 'true', DO_CONTROL_PIN_REQUIRED: 'false', DO_CONTROL_PIN: testPin });
+  const f = await fixture(t, { doControl: guard }), v = await f.viewer();
+  assert.equal(v.value.controlPinRequired, false); assert.equal(v.value.controlAuthorized, true);
+  const settings = await (await fetch(f.url + '/api/settings')).json();
+  assert.deepEqual(settings.doControl, { enabled: true, pinRequired: false, pinConfigured: true });
+  assert.ok(!JSON.stringify(settings).includes(testPin));
+  assert.equal((await f.post('output', 'invalid', command())).status, 403);
+  assert.equal((await fetch(f.url + '/api/robots/R_006/io/output', { method: 'POST', headers: {
+    Origin: 'http://other.example', 'Content-Type': 'application/json', 'X-IO-Control-Token': v.token
+  }, body: JSON.stringify(command()) })).status, 403);
+  assert.equal(f.calls, 0);
+  assert.equal((await f.post('output', v.token, command())).status, 200);
+  assert.equal((await f.post('charge', v.token, { requestId: 'f'.repeat(32), value: 1, expectedValue: 0 })).status, 200);
+  assert.equal(f.calls, 2);
+  assert.equal((await (await f.post('lock', v.token)).json()).authorized, true);
+  await v.close(); await new Promise(resolve => setTimeout(resolve, 20));
+  assert.equal((await f.post('output', v.token, command())).status, 403);
+});
+
+test('PIN-optional mode works without a PIN, and master disable still blocks it', async t => {
+  const guard = new DoControl({ DO_CONTROL_ENABLED: 'true', DO_CONTROL_PIN_REQUIRED: 'false' });
+  assert.equal(guard.enabled, true); assert.equal(guard.authorized({}), true); assert.equal(guard.authorized(null), false);
+  const env = { DO_CONTROL_ENABLED: 'false', DO_CONTROL_PIN_REQUIRED: 'false' };
+  const f = await fixture(t, { doControl: new DoControl(env) }), v = await f.viewer();
+  assert.equal((await f.post('output', v.token, command())).status, 403);
+  assert.equal(f.calls, 0); await v.close();
 });
 
 test('PIN unlock authorizes only that viewer/robot, expires, locks and never appears in responses', async t => {

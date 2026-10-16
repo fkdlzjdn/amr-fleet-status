@@ -77,13 +77,14 @@ function renderIoDetail(robot) {
     $('io-control-lock').onclick = lockIoControl;
   }
   const enabled = io.controlEnabled ?? state.settings?.doControl?.enabled ?? false;
-  const unlocked = Boolean(io.controlAuthorized && ioState.authorizedUntil > Date.now());
-  $('io-control-status').textContent = !enabled ? 'DO 제어 비활성화 · 조회 전용' : unlocked ? 'DO 제어 활성 · PIN 인증 완료' : 'DO 제어 잠김';
-  $('io-control-description').textContent = !enabled ? '서버 관리자가 .env에서 PIN을 설정하고 DO 제어를 활성화해야 합니다.'
+  const pinRequired = io.controlPinRequired ?? state.settings?.doControl?.pinRequired ?? true;
+  const unlocked = Boolean(enabled && io.controlAuthorized && (!pinRequired || ioState.authorizedUntil > Date.now()));
+  $('io-control-status').textContent = !enabled ? 'DO 제어 비활성화 · 조회 전용' : !pinRequired ? 'DO 제어 활성 · PIN 인증 생략' : unlocked ? 'DO 제어 활성 · PIN 인증 완료' : 'DO 제어 잠김';
+  $('io-control-description').textContent = !enabled ? '서버 관리자가 .env에서 DO 제어를 활성화해야 합니다.' : !pinRequired ? '현재 PIN 없이 ON/OFF를 사용할 수 있습니다. 실시간 상태가 확인된 채널에서 제어하세요.'
     : unlocked ? '인증은 이 IO 화면에서 최대 20분간 유효합니다. 패널을 닫거나 재연결하면 잠깁니다.' : '관리자가 정한 PIN으로 이 화면의 출력 제어를 잠금 해제하세요. IO 조회는 계속 사용할 수 있습니다.';
-  $('io-pin-form').hidden = unlocked;
-  $('io-pin-setup').hidden = enabled;
-  $('io-control-lock').hidden = !unlocked;
+  $('io-pin-form').hidden = !pinRequired || unlocked;
+  $('io-pin-setup').hidden = !pinRequired || enabled;
+  $('io-control-lock').hidden = !pinRequired || !unlocked;
   $('io-control-lock').disabled = Boolean(ioState.outputPending);
   $('io-pin-submit').disabled = !enabled || ioState.authPending || !io.controlToken;
   $('io-pin').disabled = !enabled || ioState.authPending || !io.controlToken;
@@ -104,7 +105,7 @@ function renderIoDetail(robot) {
     const ready = known && channel && unlocked && io.controlToken && !ioState.outputPending;
     for (const button of $('drawer-content').querySelectorAll('[data-charge-output]')) button.disabled = !ready;
     $('charge-availability').textContent = !known ? ioReasons[io.status] || ioReasons.unavailable : !channel ? '유일하고 유효한 charge_relay DO가 없어 충전 제어를 지원하지 않습니다.'
-      : !enabled ? '서버 PIN 설정 후 충전 제어를 사용할 수 있습니다.' : !unlocked ? 'PIN 인증 후 충전 ON/OFF를 선택하세요.' : ioState.outputPending ? '충전 요청 결과 확인 중…' : '충전 ON 또는 OFF를 명시적으로 선택하세요.';
+      : !enabled ? '서버에서 DO 제어를 활성화한 후 사용할 수 있습니다.' : !unlocked ? 'PIN 인증 후 충전 ON/OFF를 선택하세요.' : ioState.outputPending ? '충전 요청 결과 확인 중…' : '충전 ON 또는 OFF를 명시적으로 선택하세요.';
     return;
   }
   if (!known) return;
@@ -142,7 +143,7 @@ function stopIo() {
 }
 function startIo() {
   ioState.ageTimer = setInterval(() => {
-    if (ioState.authorizedUntil && ioState.authorizedUntil <= Date.now()) {
+    if (ioState.value?.controlPinRequired !== false && ioState.authorizedUntil && ioState.authorizedUntil <= Date.now()) {
       ioState.authorizedUntil = 0;
       if (ioState.value) ioState.value.controlAuthorized = false;
       ioState.authMessage = 'PIN 인증이 만료되었습니다. 다시 입력하세요.';
@@ -235,7 +236,7 @@ async function lockIoControl() {
 async function setIoOutput(key, value, charging = false) {
   const io = ioView(ioState.value);
   if (ioState.outputPending || state.drawerMode !== 'io' || !state.selected || !['observed', 'partial'].includes(io.status) || !io.controlToken
-    || !io.controlAuthorized || ioState.authorizedUntil <= Date.now()) return;
+    || !io.controlAuthorized || (io.controlPinRequired !== false && ioState.authorizedUntil <= Date.now())) return;
   const channel = io.doChannels.find(ch => ioChannelKey(ch) === key);
   if (!channel?.isValid || !channel.logicalName) return;
   if (charging && chargingChannel(io) !== channel) return;

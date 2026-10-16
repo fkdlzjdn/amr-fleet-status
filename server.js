@@ -75,6 +75,7 @@ function createApplication(collector, options = {}) {
           dispose(); return response.end();
         }
         response.write(`event: io\ndata: ${JSON.stringify({ ...value, controlToken, controlEnabled: doControl.enabled,
+          controlPinRequired: doControl.pinRequired,
           controlAuthorized: doControl.authorized(controlSession) })}\n\n`);
         if (ended) { dispose(); response.end(); }
       });
@@ -88,8 +89,8 @@ function createApplication(collector, options = {}) {
       if (request.headers.origin !== `http://${request.headers.host}`) return json(response, 403, { error: '같은 화면에서 DO 제어를 요청하세요.' });
       const token = ioControlTokens.get(request.headers['x-io-control-token']);
       if (!token || token.id !== id || token.ip !== robot.ip) return json(response, 403, { error: '열려 있는 실시간 IO 화면이 필요합니다.' });
-      if (action === 'lock') { doControl.lock(token); return json(response, 200, { authorized: false }); }
-      if (!doControl.enabled) return json(response, 403, { error: 'DO 제어가 비활성화되어 있습니다. 서버 관리자에게 PIN 설정을 요청하세요.' });
+      if (action === 'lock') { doControl.lock(token); return json(response, 200, { authorized: doControl.authorized(token) }); }
+      if (!doControl.enabled) return json(response, 403, { error: 'DO 제어가 비활성화되어 있습니다. 서버 관리자에게 활성화를 요청하세요.' });
       if (['output', 'charge'].includes(action) && !doControl.authorized(token)) return json(response, 403, { error: 'DO 제어 PIN 인증이 필요합니다.', pinRequired: true });
       if (!request.headers['content-type']?.startsWith('application/json')) return json(response, 415, { error: 'JSON 형식으로 입력하세요.' });
       let body = '';

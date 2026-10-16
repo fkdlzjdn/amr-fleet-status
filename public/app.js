@@ -327,7 +327,7 @@ function renderSettings(settings) {
     <p id="range-feedback" role="status" aria-live="polite"></p></form>
     <p class="range-current">적용 범위 <strong id="applied-range">${escapeHTML(rangeLabel(settings.range))}</strong></p></article>
     <article><h3>실제 수집</h3><dl>${detailRows([['수집 방식', 'SSH 읽기 전용'], ['목록 표시', '현재 정보 조회 성공 로봇'], ['수집 목표 간격', settings.intervalMs / 1000 + '초'], ['동시 조회 제한', settings.concurrency + '대'], ['수동 제어', 'IO 체크의 DO ON/OFF']])}</dl></article>
-    <article><h3>서버 인증 설정</h3><dl>${detailRows([['접속 계정', settings.username], ['SSH 키', settings.keyConfigured ? '설정됨' : '미설정'], ['비밀번호', settings.passwordConfigured ? '설정됨 · 값 비공개' : '미설정'], ['known_hosts', settings.knownHostsConfigured ? '설정됨 · 키 검증 적용' : '등록 필요'], ['DO 제어', settings.doControl?.enabled ? 'PIN 인증 후 사용' : '비활성화 · 조회 전용'], ['DO PIN', settings.doControl?.pinConfigured ? '설정됨 · 값 비공개' : '서버 관리자 설정 필요']])}</dl></article>`;
+    <article><h3>서버 인증 설정</h3><dl>${detailRows([['접속 계정', settings.username], ['SSH 키', settings.keyConfigured ? '설정됨' : '미설정'], ['비밀번호', settings.passwordConfigured ? '설정됨 · 값 비공개' : '미설정'], ['known_hosts', settings.knownHostsConfigured ? '설정됨 · 키 검증 적용' : '등록 필요'], ['DO 제어', settings.doControl?.enabled ? settings.doControl.pinRequired ? 'PIN 인증 후 사용' : '바로 사용 · PIN 비활성' : '비활성화 · 조회 전용'], ['DO PIN', settings.doControl?.pinConfigured ? '설정됨 · 값 비공개' : '서버 관리자 설정 필요']])}</dl></article>`;
   $('range-form').onsubmit = saveRange;
   $('range-default').onclick = () => {
     $('range-start').value = settings.defaultRange.startIp; $('range-end').value = settings.defaultRange.endIp;
