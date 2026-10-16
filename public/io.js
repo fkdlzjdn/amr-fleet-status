@@ -80,7 +80,7 @@ function renderIoDetail(robot) {
   const unlocked = Boolean(io.controlAuthorized && ioState.authorizedUntil > Date.now());
   $('io-control-status').textContent = !enabled ? 'DO 제어 비활성화 · 조회 전용' : unlocked ? 'DO 제어 활성 · PIN 인증 완료' : 'DO 제어 잠김';
   $('io-control-description').textContent = !enabled ? '서버 관리자가 .env에서 PIN을 설정하고 DO 제어를 활성화해야 합니다.'
-    : unlocked ? '인증은 이 IO 화면에서 최대 5분간 유효합니다. 패널을 닫거나 재연결하면 잠깁니다.' : '관리자가 정한 PIN으로 이 화면의 출력 제어를 잠금 해제하세요. IO 조회는 계속 사용할 수 있습니다.';
+    : unlocked ? '인증은 이 IO 화면에서 최대 20분간 유효합니다. 패널을 닫거나 재연결하면 잠깁니다.' : '관리자가 정한 PIN으로 이 화면의 출력 제어를 잠금 해제하세요. IO 조회는 계속 사용할 수 있습니다.';
   $('io-pin-form').hidden = unlocked;
   $('io-pin-setup').hidden = enabled;
   $('io-control-lock').hidden = !unlocked;

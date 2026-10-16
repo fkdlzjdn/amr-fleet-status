@@ -110,13 +110,15 @@ test('PIN unlock authorizes only that viewer/robot, expires, locks and never app
   assert.equal((await f.post('output', first.token, command())).status, 403);
   assert.equal((await f.post('unlock', first.token, { pin: '000000' })).status, 401);
   const unlocked = await f.post('unlock', first.token, { pin: testPin }); assert.equal(unlocked.status, 200);
-  const reply = await unlocked.text(); assert.ok(!reply.includes(testPin)); assert.equal(JSON.parse(reply).expiresInMs, 300000);
+  const reply = await unlocked.text(); assert.ok(!reply.includes(testPin)); assert.equal(JSON.parse(reply).expiresInMs, 1200000);
   assert.equal((await f.post('output', second.token, command())).status, 403);
   assert.equal((await f.post('output', first.token, command(), 'R_007')).status, 403);
   assert.equal((await f.post('output', first.token, command())).status, 200); assert.equal(f.calls, 1);
   assert.equal((await f.post('lock', first.token)).status, 200);
   assert.equal((await f.post('output', first.token, command())).status, 403);
   await f.post('unlock', first.token, { pin: testPin }); now += 300001;
+  assert.equal((await f.post('output', first.token, command())).status, 200);
+  now += 900000;
   assert.equal((await f.post('output', first.token, command())).status, 403);
   await f.post('unlock', first.token, { pin: testPin });
   await first.close(); await new Promise(resolve => setTimeout(resolve, 20));
@@ -142,7 +144,7 @@ test('authorization is rechecked after reading a slow DO body', async t => {
       Origin: f.url, 'Content-Type': 'application/json', 'X-IO-Control-Token': v.token
     } }, response => { response.resume(); response.on('end', () => resolve(response.statusCode)); });
     request.on('error', reject); const body = JSON.stringify(command()); request.write(body.slice(0, 5));
-    setTimeout(() => { now += 300001; request.end(body.slice(5)); }, 30);
+    setTimeout(() => { now += 1200001; request.end(body.slice(5)); }, 30);
   });
   assert.equal(result, 403); assert.equal(f.calls, 0); await v.close();
 });
