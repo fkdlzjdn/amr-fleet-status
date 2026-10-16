@@ -31,6 +31,7 @@ main{padding:30px 38px 16px;max-width:1780px;margin:auto}.page-heading{display:f
 .battery-reading .battery-live-status{display:inline-flex;align-items:center;gap:4px;font-size:9px;color:#879189;line-height:1.2}.battery-reading .battery-live-status.live{color:#347d5f}.battery-live-status i{width:5px;height:5px;background:currentColor;border-radius:50%;flex:none}
 
 /* Operations overview */
+.io-control-gate{border:1px solid #d5e0e7;border-radius:10px;background:#f7fafb;padding:15px;margin:16px 0}.io-control-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}.io-control-heading strong{font-size:12px}.io-control-gate p{font-size:11px;line-height:1.8;color:var(--muted);margin:9px 0 0}.io-control-gate label{display:block;font-size:11px;margin:12px 0 6px}.io-control-gate form>div{display:flex;gap:8px}.io-control-gate input{border:1px solid #bccdd8;border-radius:7px;padding:9px 10px;min-width:0;width:170px;max-width:100%;font:inherit;background:#fff}.io-control-gate .button{font-size:11px;padding:8px 12px}.io-control-gate #io-pin-feedback{color:#8e5c21}
 .ops-panel{display:grid;grid-template-columns:minmax(240px,1fr) minmax(470px,1.35fr);gap:32px;align-items:center;margin-bottom:18px;padding:27px 30px;border:1px solid #344452;border-radius:12px;background:#1b2833;color:#eaf0f5}
 .ops-kicker{display:block;font:10px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;letter-spacing:1.6px;color:#91a9b9;margin-bottom:10px}
 .ops-copy h2{margin:0;color:#f0f4f8;font-size:25px;font-weight:650;letter-spacing:-.7px;line-height:1.4}

@@ -11,6 +11,7 @@ const { openIoStream } = require('../lib/ssh-probe');
 const { Collector } = require('../lib/collector');
 const { inventoryFile } = require('../lib/config');
 const { createApplication } = require('../server');
+const { DoControl } = require('../lib/do-control');
 const robot = inventoryFile(path.join(__dirname, '..'))[5];
 const sample = () => ({ ok: true, payload: { io: { status: 'observed', message_age_seconds: 0.05,
   ...JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/r56-io-status.json'), 'utf8')) } } });
@@ -49,7 +50,7 @@ test('DO HTTP endpoint requires same origin and a token belonging to an open IO 
     packet = onPacket; return { close() {}, setOutput: async cmd => { calls++; return confirmed(cmd); } };
   } });
   const collector = new Collector([robot], { statePath: '/nonexistent/do-http-test.json' });
-  const server = createApplication(collector, { ioService: service });
+  const server = createApplication(collector, { ioService: service, doControl: new DoControl({ DO_CONTROL_ENABLED: 'true', DO_CONTROL_PIN: '836204' }) });
   t.after(() => { server.closeClients(); server.closeAllConnections(); server.close(); });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve)); const url = `http://127.0.0.1:${server.address().port}`;
   const post = headers => fetch(url + '/api/robots/R_006/io/output', { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(command()) });
@@ -62,6 +63,9 @@ test('DO HTTP endpoint requires same origin and a token belonging to an open IO 
   assert.equal((await post({ 'X-IO-Control-Token': token })).status, 403);
   assert.equal((await post({ Origin: 'http://other.example', 'X-IO-Control-Token': token })).status, 403);
   assert.equal(calls, 0);
+  assert.equal((await post({ Origin: url, 'X-IO-Control-Token': token })).status, 403);
+  assert.equal((await fetch(url + '/api/robots/R_006/io/unlock', { method: 'POST',
+    headers: { Origin: url, 'Content-Type': 'application/json', 'X-IO-Control-Token': token }, body: JSON.stringify({ pin: '836204' }) })).status, 200);
   assert.equal((await (await post({ Origin: url, 'X-IO-Control-Token': token })).json()).status, 'confirmed'); assert.equal(calls, 1);
   await post({ Origin: url, 'X-IO-Control-Token': token }); assert.equal(calls, 1);
   await reader.cancel(); await new Promise(resolve => setTimeout(resolve, 30));

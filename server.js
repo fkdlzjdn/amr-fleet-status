@@ -8,17 +8,20 @@ const { credentials } = require('./lib/ssh-probe');
 const { listenServer, printAddresses } = require('./lib/server-listen');
 const { IoService } = require('./lib/io-service');
 const { BatteryLive } = require('./lib/battery-live');
+const { DoControl } = require('./lib/do-control');
 const { loadEnv, inventoryFile, DEFAULT_RANGE, validateRange, loadRange, saveRange, inventoryForRange } = require('./lib/config');
 const root = __dirname;
 loadEnv(path.join(root, '.env'));
 const assets = { '/': ['index.html', 'text/html; charset=utf-8'], '/index.html': ['index.html', 'text/html; charset=utf-8'],
   '/style.css': ['style.css', 'text/css; charset=utf-8'], '/app.js': ['app.js', 'text/javascript; charset=utf-8'], '/io.js': ['io.js', 'text/javascript; charset=utf-8'], '/favicon.svg': ['favicon.svg', 'image/svg+xml'] };
 function json(response, status, data) {
+  if (response.destroyed || response.writableEnded) return;
   response.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }); response.end(JSON.stringify(data));
 }
 function createApplication(collector, options = {}) {
   const ioService = options.ioService || new IoService();
   const batteryLive = options.batteryLive || new BatteryLive(collector);
+  const doControl = options.doControl || new DoControl();
   const snapshot = () => batteryLive.snapshot(collector.snapshot());
   const rangePath = options.rangePath || path.join(root, 'runtime/scan-range.json');
   const defaults = options.inventory || inventoryFile(root);
@@ -40,12 +43,17 @@ function createApplication(collector, options = {}) {
     }
   });
   const heartbeat = setInterval(() => { for (const response of clients) response.write(': heartbeat\n\n'); }, 15000); heartbeat.unref();
-  const server = http.createServer(async (request, response) => {
+  const handleRequest = async (request, response) => {
+    response.on('error', () => response.destroy());
     response.setHeader('X-Content-Type-Options', 'nosniff');
     response.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'");
-    const url = new URL(request.url, 'http://localhost');
+    let url;
+    try {
+      if (!request.url?.startsWith('/') || request.url.startsWith('//')) return json(response, 400, { error: '올바른 요청 경로가 아닙니다.' });
+      url = new URL(request.url, 'http://localhost');
+    } catch { return json(response, 400, { error: '올바른 요청 경로가 아닙니다.' }); }
     if (request.method === 'POST' && request.headers.origin && request.headers.origin !== `http://${request.headers.host}`) return json(response, 403, { error: 'Origin not allowed' });
-    if (request.method === 'GET' && url.pathname === '/api/health') return json(response, 200, { status: 'ok', mode: 'live', version: '0.3.0', readOnly: false, ioOutputControl: true, collector: collector.snapshot().collector });
+    if (request.method === 'GET' && url.pathname === '/api/health') return json(response, 200, { status: 'ok', mode: 'live', version: '0.3.0', readOnly: !doControl.enabled, ioOutputControl: doControl.enabled, collector: collector.snapshot().collector });
     if (request.method === 'GET' && url.pathname === '/api/fleet') return json(response, 200, snapshot());
     if (request.method === 'GET' && url.pathname === '/api/collector/status') return json(response, 200, collector.snapshot().collector);
     if (request.method === 'GET' && /^\/api\/robots\/(?:R_\d{3}|IP_[0-9_]+)\/io\/events$/.test(url.pathname)) {
@@ -55,28 +63,34 @@ function createApplication(collector, options = {}) {
       response.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache',
         Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
       response.write('retry: 1000\n\n'); ioClients.add(response);
-      const controlToken = crypto.randomBytes(24).toString('hex'); ioControlTokens.set(controlToken, { id, ip: robot.ip });
+      const controlToken = crypto.randomBytes(24).toString('hex');
+      const controlSession = { id, ip: robot.ip, authorizedUntil: 0 }; ioControlTokens.set(controlToken, controlSession);
       let unsubscribe, closed = false;
       const dispose = () => { if (closed) return; closed = true; clearInterval(beat); ioClients.delete(response); ioControlTokens.delete(controlToken); unsubscribe?.(); };
       const beat = setInterval(() => { if (!closed) response.write(': heartbeat\n\n'); }, 5000); beat.unref();
       response.on('close', dispose);
       unsubscribe = ioService.subscribe(robot, (value, ended) => {
-        if (closed) return;
+        if (closed || response.destroyed || response.writableEnded) { dispose(); return; }
         if (response.writableLength > 256 * 1024 || !collector.inventory.some(item => item.expected_rid === id && item.ip === robot.ip)) {
           dispose(); return response.end();
         }
-        response.write(`event: io\ndata: ${JSON.stringify({ ...value, controlToken })}\n\n`);
+        response.write(`event: io\ndata: ${JSON.stringify({ ...value, controlToken, controlEnabled: doControl.enabled,
+          controlAuthorized: doControl.authorized(controlSession) })}\n\n`);
         if (ended) { dispose(); response.end(); }
       });
       if (closed) unsubscribe();
       return;
     }
-    if (request.method === 'POST' && /^\/api\/robots\/(?:R_\d{3}|IP_[0-9_]+)\/io\/output$/.test(url.pathname)) {
+    if (request.method === 'POST' && /^\/api\/robots\/(?:R_\d{3}|IP_[0-9_]+)\/io\/(?:unlock|lock|output)$/.test(url.pathname)) {
+      const action = url.pathname.split('/').at(-1);
       const id = url.pathname.split('/')[3], robot = collector.inventory.find(item => item.expected_rid === id);
       if (!robot) return json(response, 404, { error: '등록된 로봇이 아닙니다.' });
       if (request.headers.origin !== `http://${request.headers.host}`) return json(response, 403, { error: '같은 화면에서 DO 제어를 요청하세요.' });
       const token = ioControlTokens.get(request.headers['x-io-control-token']);
       if (!token || token.id !== id || token.ip !== robot.ip) return json(response, 403, { error: '열려 있는 실시간 IO 화면이 필요합니다.' });
+      if (action === 'lock') { doControl.lock(token); return json(response, 200, { authorized: false }); }
+      if (!doControl.enabled) return json(response, 403, { error: 'DO 제어가 비활성화되어 있습니다. 서버 관리자에게 PIN 설정을 요청하세요.' });
+      if (action === 'output' && !doControl.authorized(token)) return json(response, 403, { error: 'DO 제어 PIN 인증이 필요합니다.', pinRequired: true });
       if (!request.headers['content-type']?.startsWith('application/json')) return json(response, 415, { error: 'JSON 형식으로 입력하세요.' });
       let body = '';
       try {
@@ -84,6 +98,12 @@ function createApplication(collector, options = {}) {
         const command = JSON.parse(body);
         if (ioControlTokens.get(request.headers['x-io-control-token']) !== token) return json(response, 403, { error: 'IO 연결이 종료되었습니다. 다시 연결하세요.' });
         if (!collector.inventory.some(item => item.expected_rid === id && item.ip === robot.ip)) return json(response, 409, { error: '조회 범위가 변경되었습니다.' });
+        if (action === 'unlock') {
+          const result = doControl.unlock(token, command?.pin, request.socket.remoteAddress || 'unknown');
+          if (result.retryAfter) response.setHeader('Retry-After', result.retryAfter);
+          return json(response, result.status, result);
+        }
+        if (!doControl.authorized(token)) return json(response, 403, { error: 'DO 제어 PIN 인증이 만료되었습니다.', pinRequired: true });
         const result = await ioService.setOutput(robot, command);
         return json(response, result.status === 'rejected' ? 409 : result.status === 'unconfirmed' ? 202 : 200, result);
       } catch (error) {
@@ -101,7 +121,7 @@ function createApplication(collector, options = {}) {
     }
     if (request.method === 'GET' && url.pathname === '/api/settings') {
       const auth = credentials();
-      return json(response, 200, { mode: 'live', readOnly: false, ioOutputControl: true, range: collector.range || validateRange(DEFAULT_RANGE), defaultRange: DEFAULT_RANGE, maxTargets: 256, username: auth.username,
+      return json(response, 200, { mode: 'live', readOnly: !doControl.enabled, ioOutputControl: doControl.enabled, doControl: doControl.status(), range: collector.range || validateRange(DEFAULT_RANGE), defaultRange: DEFAULT_RANGE, maxTargets: 256, username: auth.username,
         keyConfigured: Boolean(auth.privateKey), passwordConfigured: Boolean(auth.password), knownHostsConfigured: Boolean(auth.knownHosts),
         intervalMs: collector.interval, concurrency: collector.concurrency, total: collector.inventory.length });
     }
@@ -138,6 +158,14 @@ function createApplication(collector, options = {}) {
     if (request.method !== 'GET' || !asset) { response.writeHead(404); return response.end('Not found'); }
     fs.readFile(path.join(root, 'public', asset[0]), (error, data) => { if (error) { response.writeHead(500); return response.end('Asset unavailable'); }
       response.writeHead(200, { 'Content-Type': asset[1], 'Cache-Control': 'no-cache' }); response.end(data); });
+  };
+  const server = http.createServer((request, response) => {
+    Promise.resolve().then(() => handleRequest(request, response)).catch(() => {
+      // Never return raw exceptions or request bodies (which may contain a PIN).
+      if (response.destroyed || response.writableEnded) return;
+      if (response.headersSent) return response.destroy();
+      json(response, 500, { error: '요청을 처리하지 못했습니다. 다시 시도하세요.' });
+    });
   });
   server.on('close', () => { clearInterval(heartbeat); clearTimeout(scheduled); ioService.close?.(); batteryLive.close(); });
   server.closeClients = () => {

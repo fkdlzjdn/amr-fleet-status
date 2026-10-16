@@ -11,6 +11,7 @@ const { hostKeys, verifyHost, hostAlgorithms } = require('../lib/known-hosts');
 const { inventoryFile } = require('../lib/config');
 const { remoteCommand } = require('../lib/ssh-probe');
 const { createApplication } = require('../server');
+const { DoControl } = require('../lib/do-control');
 const inventory = inventoryFile(path.join(__dirname, '..'));
 function ros2(rid = 'R_006', model = 'sl400_vri') {
   return { schema_version: 1, hostname: 'syscon', installed_distros: ['jazzy', 'noetic'], boot_id: 'boot-a', os: { VERSION_ID: '24.04' },
@@ -105,10 +106,10 @@ test('old successful values are marked stale rather than displayed as current he
 test('live API exposes no password/private key and refresh only queues registered reads', async t => {
   const c = new Collector(inventory, { statePath: '/nonexistent/fleet-test.json' }); const calls = [];
   c.refresh = id => { calls.push(id || 'all'); return true; };
-  const server = createApplication(c); await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const server = createApplication(c, { doControl: new DoControl({}) }); await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   t.after(() => { server.closeClients(); server.close(); });
   const url = `http://127.0.0.1:${server.address().port}`;
-  const health = await (await fetch(url + '/api/health')).json(); assert.equal(health.mode, 'live'); assert.equal(health.readOnly, false); assert.equal(health.ioOutputControl, true);
+  const health = await (await fetch(url + '/api/health')).json(); assert.equal(health.mode, 'live'); assert.equal(health.readOnly, true); assert.equal(health.ioOutputControl, false);
   const settings = await (await fetch(url + '/api/settings')).json(); assert.equal(typeof settings.keyConfigured, 'boolean');
   assert.ok(!Object.hasOwn(settings, 'password') && !Object.hasOwn(settings, 'privateKey'));
   assert.equal((await fetch(url + '/api/robots/R_006/refresh', { method: 'POST' })).status, 202); assert.deepEqual(calls, ['R_006']);

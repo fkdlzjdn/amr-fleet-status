@@ -1,5 +1,6 @@
 'use strict';
-const ioState = { value: null, pending: false, ageTimer: null, stream: null, generation: 0, changed: new Set(), flashes: new Map(), layout: null, outputPending: null, outputResult: null };
+const ioState = { value: null, pending: false, ageTimer: null, stream: null, generation: 0, changed: new Set(), flashes: new Map(), layout: null, outputPending: null, outputResult: null,
+  authPending: false, authorizedUntil: 0, authMessage: '' };
 const ioDriverAvailability = new Map();
 function ioDriverState(robot) {
   const live = ioDriverAvailability.get(robot.id);
@@ -52,10 +53,29 @@ function renderIoDetail(robot) {
     ioState.layout = structure;
     $('drawer-content').innerHTML = `<div class="io-intro"><div><code>${escapeHTML(robot.ip)}:${robot.port}</code><span class="pill io-stream-status"></span></div><p>입력과 출력의 현재 신호를 확인하세요.</p><small>연결을 유지해 IO 변화를 바로 전달합니다. 패널을 닫으면 연결을 마칩니다.</small></div>
       <div class="io-note">상태는 원시값이며 DO 버튼은 논리명 기준 ON/OFF입니다. 반전 설정에 따라 둘은 다를 수 있습니다. DO 제어는 모터 전원·충전 릴레이 등 연결 장치에 적용됩니다.</div>
+      <section class="io-control-gate" aria-label="DO 제어 잠금">
+        <div class="io-control-heading"><strong id="io-control-status"></strong><button id="io-control-lock" class="button secondary" type="button" hidden>제어 잠금</button></div>
+        <p id="io-control-description"></p>
+        <form id="io-pin-form" hidden autocomplete="off"><label for="io-pin">DO 제어 PIN</label><div><input id="io-pin" type="password" inputmode="numeric" pattern="[0-9]{6,12}" minlength="6" maxlength="12" required autocomplete="off" spellcheck="false" placeholder="6~12자리 숫자"><button id="io-pin-submit" class="button primary" type="submit">잠금 해제</button></div></form>
+        <p id="io-pin-feedback" role="status"></p>
+      </section>
       <p class="io-output-feedback" role="status" hidden></p>
       ${known ? `<div class="io-overview"></div>${ioDeviceBoards(io)}<p class="io-notice io-invalid-notice" hidden>유효하지 않은 채널은 미확인으로 표시합니다.</p>` : `<p class="io-notice" role="status">${escapeHTML(ioReasons[io.status] || ioReasons.unavailable)}</p>`}
       <dl class="io-source">${detailRows([['노드', io.node || '미확인'], ['토픽', io.topic || '미확인']])}</dl>`;
+    $('io-pin-form').onsubmit = unlockIoControl;
+    $('io-control-lock').onclick = lockIoControl;
   }
+  const enabled = io.controlEnabled ?? state.settings?.doControl?.enabled ?? false;
+  const unlocked = Boolean(io.controlAuthorized && ioState.authorizedUntil > Date.now());
+  $('io-control-status').textContent = !enabled ? 'DO 제어 비활성화 · 조회 전용' : unlocked ? 'DO 제어 활성 · PIN 인증 완료' : 'DO 제어 잠김';
+  $('io-control-description').textContent = !enabled ? '서버 관리자가 .env에서 PIN을 설정하고 DO 제어를 활성화해야 합니다.'
+    : unlocked ? '인증은 이 IO 화면에서 최대 5분간 유효합니다. 패널을 닫거나 재연결하면 잠깁니다.' : '관리자가 정한 PIN으로 이 화면의 출력 제어를 잠금 해제하세요. IO 조회는 계속 사용할 수 있습니다.';
+  $('io-pin-form').hidden = !enabled || unlocked;
+  $('io-control-lock').hidden = !unlocked;
+  $('io-control-lock').disabled = Boolean(ioState.outputPending);
+  $('io-pin-submit').disabled = ioState.authPending || !io.controlToken;
+  $('io-pin').disabled = ioState.authPending || !io.controlToken;
+  $('io-pin-feedback').textContent = ioState.authMessage;
   const badge = $('drawer-content').querySelector('.io-stream-status');
   badge.textContent = known ? '실시간 수신 중' : io.status === 'loading' ? '연결 중' : 'IO 미확인';
   badge.className = `pill io-stream-status ${known && io.status !== 'partial' ? 'good' : 'neutral'}`;
@@ -75,8 +95,8 @@ function renderIoDetail(robot) {
     if (value.textContent !== text) value.textContent = text;
     for (const button of row.querySelectorAll('[data-io-output]')) {
       const unique = channels.filter(ch => ch.logicalName === channel.logicalName).length === 1;
-      button.disabled = !io.controlToken || !channel.isValid || !channel.logicalName || !unique || Boolean(ioState.outputPending);
-      button.title = button.disabled ? '실시간으로 확인된 DO 채널에서만 제어할 수 있습니다.' : `${channel.logicalName} 논리 ${button.dataset.ioOutput === '1' ? 'ON' : 'OFF'} 요청`;
+      button.disabled = !unlocked || !io.controlToken || !channel.isValid || !channel.logicalName || !unique || Boolean(ioState.outputPending);
+      button.title = !unlocked ? 'DO 제어 PIN 인증이 필요합니다.' : button.disabled ? '실시간으로 확인된 DO 채널에서만 제어할 수 있습니다.' : `${channel.logicalName} 논리 ${button.dataset.ioOutput === '1' ? 'ON' : 'OFF'} 요청`;
     }
   }
   for (const group of $('drawer-content').querySelectorAll('.io-group')) {
@@ -94,9 +114,16 @@ function stopIo() {
   ioState.generation++; clearInterval(ioState.ageTimer); ioState.stream?.close();
   ioState.value = null; ioState.pending = false; ioState.stream = null; ioState.layout = null; ioState.changed.clear(); ioState.flashes.clear();
   ioState.outputPending = null; ioState.outputResult = null;
+  ioState.authPending = false; ioState.authorizedUntil = 0; ioState.authMessage = '';
 }
 function startIo() {
   ioState.ageTimer = setInterval(() => {
+    if (ioState.authorizedUntil && ioState.authorizedUntil <= Date.now()) {
+      ioState.authorizedUntil = 0;
+      if (ioState.value) ioState.value.controlAuthorized = false;
+      ioState.authMessage = 'PIN 인증이 만료되었습니다. 다시 입력하세요.';
+      if (state.drawerMode === 'io') renderDetail();
+    }
     if (state.drawerMode === 'io' && state.selected && ioView(ioState.value).status === 'stale') renderDetail();
   }, 250);
   fetchIo();
@@ -105,6 +132,7 @@ function fetchIo() {
   if (state.drawerMode !== 'io' || !state.selected || document.hidden) return;
   ioState.stream?.close();
   const id = state.selected, generation = ++ioState.generation;
+  ioState.authorizedUntil = 0; ioState.authPending = false; ioState.authMessage = '';
   ioState.value = null; ioState.layout = null; ioState.pending = true; renderDetail();
   if (typeof EventSource === 'undefined') {
     ioState.pending = false; ioState.value = { status: 'unsupported_browser', diChannels: [], doChannels: [] }; renderDetail(); return;
@@ -143,13 +171,47 @@ document.addEventListener('visibilitychange', () => {
   if (!document.hidden) fetchIo();
   else {
     ioState.generation++; ioState.stream?.close(); ioState.stream = null; ioState.pending = false;
+    ioState.authorizedUntil = 0;
     ioState.value = { status: 'paused', diChannels: [], doChannels: [] }; renderDetail();
   }
 });
 
+async function unlockIoControl(event) {
+  event.preventDefault();
+  if (ioState.authPending || !ioState.value?.controlToken) return;
+  const input = $('io-pin'), id = state.selected, generation = ioState.generation, token = ioState.value.controlToken;
+  // Keep the entered PIN out of state, DOM attributes and browser storage.
+  const body = JSON.stringify({ pin: input.value }); input.value = '';
+  ioState.authPending = true; ioState.authMessage = 'PIN 확인 중…'; renderDetail();
+  try {
+    const response = await fetch(`/api/robots/${encodeURIComponent(id)}/io/unlock`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'X-IO-Control-Token': token }, body, signal: AbortSignal.timeout(8000)
+    });
+    const result = await response.json();
+    if (generation !== ioState.generation || state.selected !== id) return;
+    if (response.ok && result.authorized && ioState.value?.controlToken === token) {
+      ioState.authorizedUntil = Date.now() + result.expiresInMs; ioState.value.controlAuthorized = true;
+      ioState.authMessage = '';
+    } else ioState.authMessage = result.error || 'PIN 인증을 완료하지 못했습니다.';
+  } catch {
+    if (generation === ioState.generation) ioState.authMessage = 'PIN 인증 응답을 확인하지 못했습니다. 다시 시도하세요.';
+  } finally {
+    if (generation === ioState.generation && state.selected === id) { ioState.authPending = false; renderDetail(); }
+  }
+}
+async function lockIoControl() {
+  const id = state.selected, token = ioState.value?.controlToken;
+  // Close the authorized stream even if the lock request cannot reach the server.
+  if (token) fetch(`/api/robots/${encodeURIComponent(id)}/io/lock`, {
+    method: 'POST', headers: { 'X-IO-Control-Token': token }, signal: AbortSignal.timeout(3000)
+  }).catch(() => {});
+  fetchIo();
+}
+
 async function setIoOutput(key, value) {
   const io = ioView(ioState.value);
-  if (ioState.outputPending || state.drawerMode !== 'io' || !state.selected || !['observed', 'partial'].includes(io.status) || !io.controlToken) return;
+  if (ioState.outputPending || state.drawerMode !== 'io' || !state.selected || !['observed', 'partial'].includes(io.status) || !io.controlToken
+    || !io.controlAuthorized || ioState.authorizedUntil <= Date.now()) return;
   const channel = io.doChannels.find(ch => ioChannelKey(ch) === key);
   if (!channel?.isValid || !channel.logicalName) return;
   const bytes = crypto.getRandomValues(new Uint8Array(16));
@@ -164,6 +226,9 @@ async function setIoOutput(key, value) {
       body: JSON.stringify(command), signal: AbortSignal.timeout(8000)
     });
     const data = await response.json();
+    if (data.pinRequired && ioState.value?.controlToken === io.controlToken) {
+      ioState.authorizedUntil = 0; ioState.value.controlAuthorized = false;
+    }
     const status = ['confirmed', 'rejected', 'unconfirmed'].includes(data.status) ? data.status : response.ok || response.status >= 500 ? 'unconfirmed' : 'rejected';
     const text = status === 'confirmed' ? `${channel.logicalName} · 논리 ${value ? 'ON' : 'OFF'} 확인`
       : status === 'rejected' ? `${channel.logicalName} · 요청 거부/실패: ${data.error || data.message || '드라이버 응답을 확인하세요.'}`
