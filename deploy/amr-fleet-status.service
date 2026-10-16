@@ -1,0 +1,17 @@
+[Unit]
+Description=AMR Fleet Status
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/deployed/amr-fleet-status
+ExecStart=/usr/bin/node %h/deployed/amr-fleet-status/server.js
+Environment=NODE_ENV=production
+Environment=PORT=3100
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=12
+UMask=0077
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,20 @@
+node_modules/
+runtime/
+.env
+*.log
+.DS_Store
+__pycache__/
+*.py[cod]
+
+# Local credentials and operational configuration
+.env.*
+!.env.example
+config/fleet.json
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+known_hosts*
+*.before-*
+# Internal planning history (kept locally)
+docs/2026-10-14_AMR_Fleet_Status_기획서_v0.1.md

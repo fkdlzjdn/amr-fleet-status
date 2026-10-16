@@ -1,0 +1,141 @@
+{
+  "header": {
+    "stamp": {
+      "sec": 1792123672,
+      "nanosec": 921174841
+    },
+    "frame_id": ""
+  },
+  "di_channels": [
+    {
+      "device_name": "ezi_io_main",
+      "logical_name": "lift_up",
+      "channel_id": 0,
+      "io_type": 0,
+      "value": 1.0,
+      "is_valid": true
+    },
+    {
+      "device_name": "ezi_io_main",
+      "logical_name": "lift_down",
+      "channel_id": 1,
+      "io_type": 0,
+      "value": 0.0,
+      "is_valid": true
+    },
+    {
+      "device_name": "ezi_io_main",
+      "logical_name": "reset",
+      "channel_id": 2,
+      "io_type": 0,
+      "value": 0.0,
+      "is_valid": true
+    },
+    {
+      "device_name": "ezi_io_main",
+      "logical_name": "emo",
+      "channel_id": 3,
+      "io_type": 0,
+      "value": 1.0,
+      "is_valid": true
+    },
+    {
+      "device_name": "ezi_io_main",
+      "logical_name": "manual",
+      "channel_id": 4,
+      "io_type": 0,
+      "value": 0.0,
+      "is_valid": true
+    },
+    {
+      "device_name": "ezi_io_main",
+      "logical_name": "auto",
+      "channel_id": 5,
+      "io_type": 0,
+      "value": 1.0,
+      "is_valid": true
+    },
+    {
+      "device_name": "ezi_io_main",
+      "logical_name": "bumper",
+      "channel_id": 6,
+      "io_type": 0,
+      "value": 0.0,
+      "is_valid": true
+    },
+    {
+      "device_name": "ezi_io_main",
+      "logical_name": "manual_charging",
+      "channel_id": 7,
+      "io_type": 0,
+      "value": 0.0,
+      "is_valid": true
+    }
+  ],
+  "do_channels": [
+    {
+      "device_name": "ezi_io_main",
+      "logical_name": "front_reset",
+      "channel_id": 0,
+      "io_type": 1,
+      "value": 0.0,
+      "is_valid": true
+    },
+    {
+      "device_name": "ezi_io_main",
+      "logical_name": "charge_relay",
+      "channel_id": 1,
+      "io_type": 1,
+      "value": 0.0,
+      "is_valid": true
+    },
+    {
+      "device_name": "ezi_io_main",
+      "logical_name": "motor_left_power_1",
+      "channel_id": 2,
+      "io_type": 1,
+      "value": 1.0,
+      "is_valid": true
+    },
+    {
+      "device_name": "ezi_io_main",
+      "logical_name": "motor_left_power_2",
+      "channel_id": 3,
+      "io_type": 1,
+      "value": 1.0,
+      "is_valid": true
+    },
+    {
+      "device_name": "ezi_io_main",
+      "logical_name": "motor_right_power_1",
+      "channel_id": 4,
+      "io_type": 1,
+      "value": 1.0,
+      "is_valid": true
+    },
+    {
+      "device_name": "ezi_io_main",
+      "logical_name": "motor_right_power_2",
+      "channel_id": 5,
+      "io_type": 1,
+      "value": 1.0,
+      "is_valid": true
+    },
+    {
+      "device_name": "ezi_io_main",
+      "logical_name": "lift_power_1",
+      "channel_id": 6,
+      "io_type": 1,
+      "value": 1.0,
+      "is_valid": true
+    },
+    {
+      "device_name": "ezi_io_main",
+      "logical_name": "do_spare_7",
+      "channel_id": 7,
+      "io_type": 1,
+      "value": 0.0,
+      "is_valid": true
+    }
+  ]
+}

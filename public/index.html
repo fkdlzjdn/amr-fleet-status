@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="AMR Fleet Status — 로봇의 실시간 현황판 및 DO 제어">
+  <title>로봇 현황 · AMR Fleet Status</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/style.css"><script src="/io.js" defer></script>
+  <script src="/app.js" defer></script>
+</head>
+<body>
+<svg class="svg-library" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><defs>
+ <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
+ <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+ <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="16" cy="17" r="3"/></symbol>
+ <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></symbol>
+ <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 8a9 9 0 1 0 .5 7M20 3v6h-6"/></symbol>
+ <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m-4-4 4 4 4-4M4 16v4h16v-4"/></symbol>
+ <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 5h13M8 12h13M8 19h13M3 5h.1M3 12h.1M3 19h.1"/></symbol>
+ <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+ <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-5-5 5 5-5 5"/></symbol>
+ <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/></symbol>
+ <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V4H4v12h4"/></symbol>
+ <symbol id="i-signal" viewBox="0 0 24 24"><path d="M4 20v-4M9 20V11m5 9V6m5 14V2"/></symbol>
+ <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+<symbol id="i-wifi" viewBox="0 0 24 24"><path d="M3 8a15 15 0 0 1 18 0M6 12a10 10 0 0 1 12 0m-9 4a5 5 0 0 1 6 0"/><circle cx="12" cy="20" r="1"/></symbol>
+<symbol id="i-robot" viewBox="0 0 24 24"><rect x="4" y="7" width="16" height="13" rx="4"/><path d="M12 7V3M2 12v4m20-4v4m-14 6v-2m8 2v-2M9 16h6"/><circle cx="8.5" cy="11.5" r=".8"/><circle cx="15.5" cy="11.5" r=".8"/></symbol>
+<symbol id="i-shield" viewBox="0 0 24 24"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6l8-3Z"/><path d="m8 12 3 3 5-6"/></symbol>
+<symbol id="robot-platform" viewBox="0 0 180 140">
+ <ellipse cx="90" cy="119" rx="69" ry="13" fill="#254e4412"/>
+ <path d="M33 87v24c0 11 18 11 18 0V91m80-3v24c0 11 18 11 18 0V89" fill="#364e4d"/>
+ <path d="m20 67 70-32 70 32v30c0 6-5 10-11 13l-48 21c-6 3-12 3-18 0l-50-22c-8-3-13-8-13-14Z" fill="#8bbfaf"/>
+ <path d="m90 99 70-32v30c0 6-5 10-11 13l-48 21c-3 2-7 2-11 2Z" fill="#69a38f"/>
+ <path d="m24 64 59-27c5-3 10-3 15 0l59 27c6 3 6 8 0 11l-59 27c-5 3-10 3-15 0L24 75c-6-3-6-8 0-11Z" fill="#eef6ef" stroke="#b9d5c5" stroke-width="2"/>
+ <path d="m45 65 39-18c4-2 8-2 12 0l39 18c3 2 3 4 0 6L96 89c-4 2-8 2-12 0L45 71c-3-2-3-4 0-6Z" fill="#d7e8d9"/>
+ <path d="m93 109 42-18v9l-42 18Z" fill="#31564c"/>
+ <path d="m99 109 11-5m5-2 13-6" stroke="#a2e7cc" stroke-width="3" stroke-linecap="round"/>
+ <path d="M62 59V36h21v23" fill="#b6cec0"/>
+ <ellipse cx="72.5" cy="35" rx="10.5" ry="5" fill="#e8f3e9"/>
+ <path d="M61 33v-8c0-8 23-8 23 0v8c0 9-23 9-23 0" fill="#425f55"/>
+ <ellipse cx="72.5" cy="25" rx="11.5" ry="5" fill="#638373"/>
+ <path d="m36 88 10 5m8 4 8 4" stroke="#e5f7e9" stroke-width="4" stroke-linecap="round"/>
+</symbol>
+<symbol id="robot-tower" viewBox="0 0 180 140">
+ <use href="#robot-platform"/>
+ <path d="m78 49 30-14 25 12v35l-29 13-26-12Z" fill="#93b4ca"/>
+ <path d="m104 61 29-14v35l-29 13Z" fill="#7398b6"/>
+ <path d="m78 49 30-14 25 12-29 14Z" fill="#dfebf3"/>
+ <path d="m109 66 17-8v13l-17 8Z" fill="#345b70"/>
+ <path d="m113 68 8-4" stroke="#c7eef3" stroke-width="3" stroke-linecap="round"/>
+</symbol>
+</defs></svg>
+<div class="app-shell">
+  <aside class="sidebar">
+    <a class="brand" href="/" aria-label="AMR Fleet Status 홈"><img src="/favicon.svg" alt="" width="36" height="36"><span>FLEET<span class="brand-sub">STATUS</span></span></a>
+    <div class="workspace-label">FLEET WORKSPACE</div>
+    <nav aria-label="주 메뉴">
+      <button class="nav-item active" data-page="overview" aria-current="page"><svg><use href="#i-grid"/></svg><span>로봇 현황</span><b id="nav-count">0</b></button>
+      <button class="nav-item" data-page="history"><svg><use href="#i-clock"/></svg><span>변경 이력</span></button>
+      <button class="nav-item" data-page="settings"><svg><use href="#i-sliders"/></svg><span>수집 설정</span></button>
+    </nav>
+    <div class="sidebar-bottom"><div class="network-label"><span class="dot neutral"></span><span>TARGET IP RANGE</span></div><code id="sidebar-range">192.168.20.51–100</code><div class="sidebar-version">MONITOR + DO <span>v0.3</span></div></div>
+  </aside>
+  <div class="workspace">
+    <header class="topbar"><div class="breadcrumb">AMR Fleet <span>/</span> <strong id="breadcrumb-current">로봇 현황</strong></div><div class="topbar-right"><span class="server-indicator"><span class="dot neutral" id="server-dot"></span><span id="server-status">서버 확인 중</span></span><button id="help-button" class="icon-button" aria-label="현황판 도움말" aria-expanded="false"><svg><use href="#i-info"/></svg></button><span class="avatar" aria-label="운영자">SC</span></div></header>
+    <main><nav class="mobile-nav" aria-label="페이지 이동"><button class="active" data-page="overview">로봇 현황</button><button data-page="history">변경 이력</button><button data-page="settings">수집 설정</button></nav>
+      <div class="page-heading"><div><div class="eyebrow">OPERATIONS DASHBOARD</div><h1 id="page-title">로봇 현황<span class="heading-count">0</span></h1><p id="page-description">SSH 연결, ROS 런타임, 배터리 및 IO 상태를 모니터링합니다.</p></div><div class="page-actions"><button id="export-button" class="button secondary"><svg><use href="#i-download"/></svg><span>CSV 내보내기</span></button><button id="refresh-button" class="button primary"><svg><use href="#i-refresh"/></svg><span>조회 갱신</span></button></div></div>
+      <div class="demo-banner live-banner"><span class="demo-label"><svg><use href="#i-shield"/></svg>현황 조회 · DO 제어</span><p>SSH 상태 수집 · ROS2 실시간 텔레메트리</p><span id="collector-progress" class="demo-mode">연결을 확인하는 중</span></div>
+      <section id="overview-page" class="page-section">
+        <section class="ops-panel" aria-labelledby="welcome-title">
+          <div class="ops-copy">
+            <span class="ops-kicker">AMR / FLEET OPERATIONS</span>
+            <h2 id="welcome-title">플릿 모니터링</h2>
+            <p id="hero-message">등록 대상의 SSH 연결 및 런타임 상태 수집 중</p>
+            <button id="how-button" class="pipeline-toggle" aria-expanded="false" aria-controls="how-panel">수집 파이프라인 <svg><use href="#i-arrow"/></svg></button>
+          </div>
+          <dl class="ops-specs" aria-label="수집 및 갱신 방식">
+            <div><dt>TRANSPORT</dt><dd>SSH <span>READ</span></dd><dd class="ops-spec-note">모델 · ROS · 프로세스 조회</dd></div>
+            <div><dt>BASE POLL</dt><dd id="ops-interval">—</dd><dd class="ops-spec-note">목표 주기 · 대기열에 따라 지연</dd></div>
+            <div><dt>TELEMETRY</dt><dd>ROS2 <span>LIVE</span></dd><dd class="ops-spec-note">배터리 구독 · IO 패널에서 구독</dd></div>
+          </dl>
+        </section>
+        <section id="how-panel" class="pipeline-panel" aria-label="데이터 수집 파이프라인" hidden>
+          <div><span>01 / CONNECT</span><h3>SSH 세션</h3><p>등록 IP와 포트로 접속해 모델, ROS 설정 및 실행 프로세스를 조회합니다.</p></div>
+          <svg aria-hidden="true"><use href="#i-arrow"/></svg>
+          <div><span>02 / COLLECT</span><h3>주기 조회 · 토픽 구독</h3><p>기본 현황은 <b id="pipeline-interval">설정 주기</b> 목표로 조회합니다. ROS2 배터리는 실시간, IO는 패널을 열 때 구독합니다.</p></div>
+          <svg aria-hidden="true"><use href="#i-arrow"/></svg>
+          <div><span>03 / PUBLISH</span><h3>SSE 이벤트 전달</h3><p>수집 결과를 브라우저에 반영합니다. DO 제어는 IO 패널의 명시적인 ON/OFF 요청으로 실행합니다.</p></div>
+        </section>
+        <div id="summary" class="summary-grid" aria-label="로봇 상태 요약"><div class="loading-block">실제 수집 현황을 불러오는 중입니다…</div></div>
+        <section class="fleet-board" aria-labelledby="fleet-title">
+          <div class="board-top"><div><h2 id="fleet-title">조회 성공 로봇 <span id="visible-count">0</span></h2><span class="subnet">192.168.20.51 – 100</span></div><div class="board-options"><label class="auto-refresh"><input type="checkbox" id="auto-refresh" checked><span>실시간 갱신</span></label><span id="updated-at" class="updated-at">—</span></div></div>
+          <div class="filter-toolbar"><span class="list-hint">현재 SSH 조회에 성공한 로봇</span><button class="text-button range-shortcut" data-page="settings">대상 IP 설정 ↗</button><div class="filter-inputs"><label class="search-box"><svg><use href="#i-search"/></svg><input id="search" type="search" placeholder="RID, IP, 모델 검색" aria-label="RID, IP, 모델 검색"><kbd>/</kbd></label><select id="ros-filter" aria-label="ROS 계열 필터"><option value="all">ROS 전체</option><option value="ros1">ROS1</option><option value="ros2">ROS2</option><option value="both">ROS1 + ROS2</option><option value="unknown">ROS 미확인</option></select><select id="model-filter" aria-label="모델 필터"><option value="all">모델 전체</option></select><button id="reset-filters" class="text-button" hidden>초기화</button></div></div>
+          <div id="table-container" class="table-container" hidden><table><thead><tr><th scope="col">로봇</th><th scope="col">연결 상태</th><th scope="col">모델</th><th scope="col">소프트웨어<small>ROS 설정</small></th><th scope="col">ROS 프로그램</th><th scope="col">자동 시작 서비스<small>scorpion</small></th><th scope="col">시작 프로그램<small>bringup</small></th><th scope="col">배터리 잔량</th><th scope="col"><span class="sr-only">자세히 보기</span></th></tr></thead><tbody id="robot-table"></tbody></table></div>
+          <div id="empty-state" class="empty-state" hidden><svg><use href="#i-search"/></svg><h3>조회 결과 없음</h3><p>현재 조건에 해당하는 조회 성공 로봇이 없습니다. 검색 조건과 대상 IP 범위를 확인하세요.</p><button class="button secondary" id="empty-reset">필터 초기화</button></div>
+          <div class="board-footer"><div class="legend"><span><i class="dot good"></i>연결됨</span><span><i class="dot warning"></i>확인 필요</span></div><span>현재 조회 실패 또는 오래된 정보는 목록에서 제외합니다.</span></div>
+        </section>
+        <div class="bottom-notes"><span><svg><use href="#i-info"/></svg>로봇 선택 시 수집 시각, 판정 근거 및 실행 상태를 확인합니다.</span><span class="collector-note">SSH 읽기 전용 수집</span></div>
+      </section>
+      <section id="history-page" class="page-section secondary-page" hidden><div class="section-heading"><h2>상태 변화 이력</h2><span class="pill neutral">실제 상태 변화</span></div><p class="muted">실제 조회 결과가 바뀐 로봇의 상태 변화입니다. 마지막 30일의 기록을 보관합니다.</p><div id="history-list" class="history-list"></div></section>
+      <section id="settings-page" class="page-section secondary-page" hidden><div class="section-heading"><h2>수집 설정</h2><span class="pill good">실제 SSH 수집</span></div><p class="muted">인증 정보는 서버에서 관리합니다. 이 화면에는 비밀번호나 개인 키를 표시하지 않습니다.</p><div id="settings-content" class="settings-grid"></div><div class="next-step"><svg><use href="#i-info"/></svg><div><h3>인증 및 포트 설정</h3><p>계정·인증 키·비밀번호는 서버 .env에서, 로봇별 포트는 config/fleet.json에서 설정합니다. 호스트키는 서버의 known_hosts로 확인합니다.</p></div></div></section>
+    </main>
+    <footer class="app-footer"><span>AMR FLEET STATUS <span class="footer-dot">·</span> 우리 로봇을 가까이, 한눈에</span><span>로봇 현황 · IO 점검 · v0.3</span></footer>
+  </div>
+</div>
+<div id="drawer-backdrop" class="drawer-backdrop" hidden></div>
+<aside id="detail-drawer" class="detail-drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title" hidden><div class="drawer-heading"><div><div class="eyebrow" id="drawer-mode-label">ROBOT DETAILS · 상태 조회</div><h2 id="drawer-title">로봇 상세</h2></div><button id="close-drawer" class="icon-button" aria-label="상세 패널 닫기"><svg><use href="#i-close"/></svg></button></div><div id="drawer-content" class="drawer-content"></div><div class="drawer-footer"><span><span id="drawer-check-time">실제 조회 결과</span></span><button id="drawer-refresh" class="button secondary"><svg><use href="#i-refresh"/></svg>이 로봇 다시 조회</button></div></aside>
+<div id="help-popover" class="help-popover" hidden><strong>현황판 읽는 법</strong><p>초록은 응답 확인, 주황은 확인할 항목, 회색은 응답 없음 또는 미확인을 뜻합니다.</p><p>ROS2에서 scorpion이 미설치여도 bringup은 실행 중일 수 있습니다.</p><p>실제 SSH 읽기 조회값입니다. 실행 상태는 프로세스 기준이며 주행 준비 상태를 보증하지 않습니다.</p><small><kbd>/</kbd> 검색 · <kbd>ESC</kbd> 상세 닫기</small></div>
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+</body></html>

@@ -1,0 +1,16 @@
+{
+  "name": "amr-fleet-status",
+  "version": "0.3.0",
+  "private": true,
+  "description": "AMR Fleet Status — ROS1/ROS2 fleet monitoring, live battery and IO control",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test tests/*.test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "ssh2": "^1.17.0"
+  }
+}

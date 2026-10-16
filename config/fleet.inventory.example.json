@@ -1,0 +1,607 @@
+{
+  "schema_version": "1.0",
+  "description": "기획용 초기 대상 목록. 실제 로봇 상태를 수집한 결과가 아닙니다.",
+  "network_prefix": "192.168.20",
+  "robots": [
+    {
+      "expected_rid": "R_001",
+      "ip": "192.168.20.51",
+      "ssh_port": 22,
+      "ssh_port_fallbacks": [
+        2222
+      ],
+      "credential_profile": "syscon-fleet",
+      "expected_model": null,
+      "enabled": true,
+      "note": "초기 포트 가정. 실제 환경 확인 후 확정"
+    },
+    {
+      "expected_rid": "R_002",
+      "ip": "192.168.20.52",
+      "ssh_port": 22,
+      "ssh_port_fallbacks": [
+        2222
+      ],
+      "credential_profile": "syscon-fleet",
+      "expected_model": null,
+      "enabled": true,
+      "note": "초기 포트 가정. 실제 환경 확인 후 확정"
+    },
+    {
+      "expected_rid": "R_003",
+      "ip": "192.168.20.53",
+      "ssh_port": 22,
+      "ssh_port_fallbacks": [
+        2222
+      ],
+      "credential_profile": "syscon-fleet",
+      "expected_model": null,
+      "enabled": true,
+      "note": "초기 포트 가정. 실제 환경 확인 후 확정"
+    },
+    {
+      "expected_rid": "R_004",
+      "ip": "192.168.20.54",
+      "ssh_port": 22,
+      "ssh_port_fallbacks": [
+        2222
+      ],
+      "credential_profile": "syscon-fleet",
+      "expected_model": null,
+      "enabled": true,
+      "note": "초기 포트 가정. 실제 환경 확인 후 확정"
+    },
+    {
+      "expected_rid": "R_005",
+      "ip": "192.168.20.55",
+      "ssh_port": 22,
+      "ssh_port_fallbacks": [
+        2222
+      ],
+      "credential_profile": "syscon-fleet",
+      "expected_model": null,
+      "enabled": true,
+      "note": "초기 포트 가정. 실제 환경 확인 후 확정"
+    },
+    {
+      "expected_rid": "R_006",
+      "ip": "192.168.20.56",
+      "ssh_port": 22,
+      "ssh_port_fallbacks": [
+        2222
+      ],
+      "credential_profile": "syscon-fleet",
+      "expected_model": null,
+      "enabled": true,
+      "note": "초기 포트 가정. 실제 환경 확인 후 확정"
+    },
+    {
+      "expected_rid": "R_007",
+      "ip": "192.168.20.57",
+      "ssh_port": 22,
+      "ssh_port_fallbacks": [
+        2222
+      ],
+      "credential_profile": "syscon-fleet",
+      "expected_model": null,
+      "enabled": true,
+      "note": "초기 포트 가정. 실제 환경 확인 후 확정"
+    },
+    {
+      "expected_rid": "R_008",
+      "ip": "192.168.20.58",
+      "ssh_port": 22,
+      "ssh_port_fallbacks": [
+        2222
+      ],
+      "credential_profile": "syscon-fleet",
+      "expected_model": null,
+      "enabled": true,
+      "note": "초기 포트 가정. 실제 환경 확인 후 확정"
+    },
+    {
+      "expected_rid": "R_009",
+      "ip": "192.168.20.59",
+      "ssh_port": 22,
+      "ssh_port_fallbacks": [
+        2222
+      ],
+      "credential_profile": "syscon-fleet",
+      "expected_model": null,
+      "enabled": true,
+      "note": "초기 포트 가정. 실제 환경 확인 후 확정"
+    },
+    {
+      "expected_rid": "R_010",
+      "ip": "192.168.20.60",
+      "ssh_port": 22,
+      "ssh_port_fallbacks": [
+        2222
+      ],
+      "credential_profile": "syscon-fleet",
+      "expected_model": null,
+      "enabled": true,
+      "note": "초기 포트 가정. 실제 환경 확인 후 확정"
+    },
+    {
+      "expected_rid": "R_011",
+      "ip": "192.168.20.61",
+      "ssh_port": 22,
+      "ssh_port_fallbacks": [
+        2222
+      ],
+      "credential_profile": "syscon-fleet",
+      "expected_model": null,
+      "enabled": true,
+      "note": "초기 포트 가정. 실제 환경 확인 후 확정"
+    },
+    {
+      "expected_rid": "R_012",
+      "ip": "192.168.20.62",
+      "ssh_port": 22,
+      "ssh_port_fallbacks": [
+        2222
+      ],
+      "credential_profile": "syscon-fleet",
+      "expected_model": null,
+      "enabled": true,
+      "note": "초기 포트 가정. 실제 환경 확인 후 확정"
+    },
+    {
+      "expected_rid": "R_013",
+      "ip": "192.168.20.63",
+      "ssh_port": 22,
+      "ssh_port_fallbacks": [
+        2222
+      ],
+      "credential_profile": "syscon-fleet",
+      "expected_model": null,
+      "enabled": true,
+      "note": "초기 포트 가정. 실제 환경 확인 후 확정"
+    },
+    {
+      "expected_rid": "R_014",
+      "ip": "192.168.20.64",
+      "ssh_port": 22,
+      "ssh_port_fallbacks": [
+        2222
+      ],
+      "credential_profile": "syscon-fleet",
+      "expected_model": null,
+      "enabled": true,
+      "note": "초기 포트 가정. 실제 환경 확인 후 확정"
+    },
+    {
+      "expected_rid": "R_015",
+      "ip": "192.168.20.65",
+      "ssh_port": 22,
+      "ssh_port_fallbacks": [
+        2222
+      ],
+      "credential_profile": "syscon-fleet",
+      "expected_model": null,
+      "enabled": true,
+      "note": "초기 포트 가정. 실제 환경 확인 후 확정"
+    },
+    {
+      "expected_rid": "R_016",
+      "ip": "192.168.20.66",
+      "ssh_port": 22,
+      "ssh_port_fallbacks": [
+        2222
+      ],
+      "credential_profile": "syscon-fleet",
+      "expected_model": null,
+      "enabled": true,
+      "note": "초기 포트 가정. 실제 환경 확인 후 확정"
+    },
+    {
+      "expected_rid": "R_017",
+      "ip": "192.168.20.67",
+      "ssh_port": 22,
+      "ssh_port_fallbacks": [
+        2222
+      ],
+      "credential_profile": "syscon-fleet",
+      "expected_model": null,
+      "enabled": true,
+      "note": "초기 포트 가정. 실제 환경 확인 후 확정"
+    },
+    {
+      "expected_rid": "R_018",
+      "ip": "192.168.20.68",
+      "ssh_port": 22,
+      "ssh_port_fallbacks": [
+        2222
+      ],
+      "credential_profile": "syscon-fleet",
+      "expected_model": null,
+      "enabled": true,
+      "note": "초기 포트 가정. 실제 환경 확인 후 확정"
+    },
+    {
+      "expected_rid": "R_019",
+      "ip": "192.168.20.69",
+      "ssh_port": 22,
+      "ssh_port_fallbacks": [
+        2222
+      ],
+      "credential_profile": "syscon-fleet",
+      "expected_model": null,
+      "enabled": true,
+      "note": "초기 포트 가정. 실제 환경 확인 후 확정"
+    },
+    {
+      "expected_rid": "R_020",
+      "ip": "192.168.20.70",
+      "ssh_port": 22,
+      "ssh_port_fallbacks": [
+        2222
+      ],
+      "credential_profile": "syscon-fleet",
+      "expected_model": null,
+      "enabled": true,
+      "note": "초기 포트 가정. 실제 환경 확인 후 확정"
+    },
+    {
+      "expected_rid": "R_021",
+      "ip": "192.168.20.71",
+      "ssh_port": 22,
+      "ssh_port_fallbacks": [
+        2222
+      ],
+      "credential_profile": "syscon-fleet",
+      "expected_model": null,
+      "enabled": true,
+      "note": "초기 포트 가정. 실제 환경 확인 후 확정"
+    },
+    {
+      "expected_rid": "R_022",
+      "ip": "192.168.20.72",
+      "ssh_port": 22,
+      "ssh_port_fallbacks": [
+        2222
+      ],
+      "credential_profile": "syscon-fleet",
+      "expected_model": null,
+      "enabled": true,
+      "note": "초기 포트 가정. 실제 환경 확인 후 확정"
+    },
+    {
+      "expected_rid": "R_023",
+      "ip": "192.168.20.73",
+      "ssh_port": 22,
+      "ssh_port_fallbacks": [
+        2222
+      ],
+      "credential_profile": "syscon-fleet",
+      "expected_model": null,
+      "enabled": true,
+      "note": "초기 포트 가정. 실제 환경 확인 후 확정"
+    },
+    {
+      "expected_rid": "R_024",
+      "ip": "192.168.20.74",
+      "ssh_port": 22,
+      "ssh_port_fallbacks": [
+        2222
+      ],
+      "credential_profile": "syscon-fleet",
+      "expected_model": null,
+      "enabled": true,
+      "note": "초기 포트 가정. 실제 환경 확인 후 확정"
+    },
+    {
+      "expected_rid": "R_025",
+      "ip": "192.168.20.75",
+      "ssh_port": 2222,
+      "ssh_port_fallbacks": [
+        22
+      ],
+      "credential_profile": "syscon-fleet",
+      "expected_model": null,
+      "enabled": true,
+      "note": "2222는 기존 접속 확인 이력 기준, 현재 접속 상태는 미확인"
+    },
+    {
+      "expected_rid": "R_026",
+      "ip": "192.168.20.76",
+      "ssh_port": 22,
+      "ssh_port_fallbacks": [
+        2222
+      ],
+      "credential_profile": "syscon-fleet",
+      "expected_model": null,
+      "enabled": true,
+      "note": "초기 포트 가정. 실제 환경 확인 후 확정"
+    },
+    {
+      "expected_rid": "R_027",
+      "ip": "192.168.20.77",
+      "ssh_port": 22,
+      "ssh_port_fallbacks": [
+        2222
+      ],
+      "credential_profile": "syscon-fleet",
+      "expected_model": null,
+      "enabled": true,
+      "note": "초기 포트 가정. 실제 환경 확인 후 확정"
+    },
+    {
+      "expected_rid": "R_028",
+      "ip": "192.168.20.78",
+      "ssh_port": 22,
+      "ssh_port_fallbacks": [
+        2222
+      ],
+      "credential_profile": "syscon-fleet",
+      "expected_model": null,
+      "enabled": true,
+      "note": "초기 포트 가정. 실제 환경 확인 후 확정"
+    },
+    {
+      "expected_rid": "R_029",
+      "ip": "192.168.20.79",
+      "ssh_port": 22,
+      "ssh_port_fallbacks": [
+        2222
+      ],
+      "credential_profile": "syscon-fleet",
+      "expected_model": null,
+      "enabled": true,
+      "note": "초기 포트 가정. 실제 환경 확인 후 확정"
+    },
+    {
+      "expected_rid": "R_030",
+      "ip": "192.168.20.80",
+      "ssh_port": 22,
+      "ssh_port_fallbacks": [
+        2222
+      ],
+      "credential_profile": "syscon-fleet",
+      "expected_model": null,
+      "enabled": true,
+      "note": "초기 포트 가정. 실제 환경 확인 후 확정"
+    },
+    {
+      "expected_rid": "R_031",
+      "ip": "192.168.20.81",
+      "ssh_port": 22,
+      "ssh_port_fallbacks": [
+        2222
+      ],
+      "credential_profile": "syscon-fleet",
+      "expected_model": null,
+      "enabled": true,
+      "note": "초기 포트 가정. 실제 환경 확인 후 확정"
+    },
+    {
+      "expected_rid": "R_032",
+      "ip": "192.168.20.82",
+      "ssh_port": 22,
+      "ssh_port_fallbacks": [
+        2222
+      ],
+      "credential_profile": "syscon-fleet",
+      "expected_model": null,
+      "enabled": true,
+      "note": "초기 포트 가정. 실제 환경 확인 후 확정"
+    },
+    {
+      "expected_rid": "R_033",
+      "ip": "192.168.20.83",
+      "ssh_port": 22,
+      "ssh_port_fallbacks": [
+        2222
+      ],
+      "credential_profile": "syscon-fleet",
+      "expected_model": null,
+      "enabled": true,
+      "note": "초기 포트 가정. 실제 환경 확인 후 확정"
+    },
+    {
+      "expected_rid": "R_034",
+      "ip": "192.168.20.84",
+      "ssh_port": 22,
+      "ssh_port_fallbacks": [
+        2222
+      ],
+      "credential_profile": "syscon-fleet",
+      "expected_model": null,
+      "enabled": true,
+      "note": "초기 포트 가정. 실제 환경 확인 후 확정"
+    },
+    {
+      "expected_rid": "R_035",
+      "ip": "192.168.20.85",
+      "ssh_port": 22,
+      "ssh_port_fallbacks": [
+        2222
+      ],
+      "credential_profile": "syscon-fleet",
+      "expected_model": null,
+      "enabled": true,
+      "note": "초기 포트 가정. 실제 환경 확인 후 확정"
+    },
+    {
+      "expected_rid": "R_036",
+      "ip": "192.168.20.86",
+      "ssh_port": 22,
+      "ssh_port_fallbacks": [
+        2222
+      ],
+      "credential_profile": "syscon-fleet",
+      "expected_model": null,
+      "enabled": true,
+      "note": "초기 포트 가정. 실제 환경 확인 후 확정"
+    },
+    {
+      "expected_rid": "R_037",
+      "ip": "192.168.20.87",
+      "ssh_port": 22,
+      "ssh_port_fallbacks": [
+        2222
+      ],
+      "credential_profile": "syscon-fleet",
+      "expected_model": null,
+      "enabled": true,
+      "note": "초기 포트 가정. 실제 환경 확인 후 확정"
+    },
+    {
+      "expected_rid": "R_038",
+      "ip": "192.168.20.88",
+      "ssh_port": 22,
+      "ssh_port_fallbacks": [
+        2222
+      ],
+      "credential_profile": "syscon-fleet",
+      "expected_model": null,
+      "enabled": true,
+      "note": "초기 포트 가정. 실제 환경 확인 후 확정"
+    },
+    {
+      "expected_rid": "R_039",
+      "ip": "192.168.20.89",
+      "ssh_port": 22,
+      "ssh_port_fallbacks": [
+        2222
+      ],
+      "credential_profile": "syscon-fleet",
+      "expected_model": null,
+      "enabled": true,
+      "note": "초기 포트 가정. 실제 환경 확인 후 확정"
+    },
+    {
+      "expected_rid": "R_040",
+      "ip": "192.168.20.90",
+      "ssh_port": 22,
+      "ssh_port_fallbacks": [
+        2222
+      ],
+      "credential_profile": "syscon-fleet",
+      "expected_model": null,
+      "enabled": true,
+      "note": "초기 포트 가정. 실제 환경 확인 후 확정"
+    },
+    {
+      "expected_rid": "R_041",
+      "ip": "192.168.20.91",
+      "ssh_port": 22,
+      "ssh_port_fallbacks": [
+        2222
+      ],
+      "credential_profile": "syscon-fleet",
+      "expected_model": null,
+      "enabled": true,
+      "note": "초기 포트 가정. 실제 환경 확인 후 확정"
+    },
+    {
+      "expected_rid": "R_042",
+      "ip": "192.168.20.92",
+      "ssh_port": 22,
+      "ssh_port_fallbacks": [
+        2222
+      ],
+      "credential_profile": "syscon-fleet",
+      "expected_model": null,
+      "enabled": true,
+      "note": "초기 포트 가정. 실제 환경 확인 후 확정"
+    },
+    {
+      "expected_rid": "R_043",
+      "ip": "192.168.20.93",
+      "ssh_port": 22,
+      "ssh_port_fallbacks": [
+        2222
+      ],
+      "credential_profile": "syscon-fleet",
+      "expected_model": null,
+      "enabled": true,
+      "note": "초기 포트 가정. 실제 환경 확인 후 확정"
+    },
+    {
+      "expected_rid": "R_044",
+      "ip": "192.168.20.94",
+      "ssh_port": 22,
+      "ssh_port_fallbacks": [
+        2222
+      ],
+      "credential_profile": "syscon-fleet",
+      "expected_model": null,
+      "enabled": true,
+      "note": "초기 포트 가정. 실제 환경 확인 후 확정"
+    },
+    {
+      "expected_rid": "R_045",
+      "ip": "192.168.20.95",
+      "ssh_port": 22,
+      "ssh_port_fallbacks": [
+        2222
+      ],
+      "credential_profile": "syscon-fleet",
+      "expected_model": null,
+      "enabled": true,
+      "note": "초기 포트 가정. 실제 환경 확인 후 확정"
+    },
+    {
+      "expected_rid": "R_046",
+      "ip": "192.168.20.96",
+      "ssh_port": 22,
+      "ssh_port_fallbacks": [
+        2222
+      ],
+      "credential_profile": "syscon-fleet",
+      "expected_model": null,
+      "enabled": true,
+      "note": "초기 포트 가정. 실제 환경 확인 후 확정"
+    },
+    {
+      "expected_rid": "R_047",
+      "ip": "192.168.20.97",
+      "ssh_port": 22,
+      "ssh_port_fallbacks": [
+        2222
+      ],
+      "credential_profile": "syscon-fleet",
+      "expected_model": null,
+      "enabled": true,
+      "note": "초기 포트 가정. 실제 환경 확인 후 확정"
+    },
+    {
+      "expected_rid": "R_048",
+      "ip": "192.168.20.98",
+      "ssh_port": 22,
+      "ssh_port_fallbacks": [
+        2222
+      ],
+      "credential_profile": "syscon-fleet",
+      "expected_model": null,
+      "enabled": true,
+      "note": "초기 포트 가정. 실제 환경 확인 후 확정"
+    },
+    {
+      "expected_rid": "R_049",
+      "ip": "192.168.20.99",
+      "ssh_port": 22,
+      "ssh_port_fallbacks": [
+        2222
+      ],
+      "credential_profile": "syscon-fleet",
+      "expected_model": null,
+      "enabled": true,
+      "note": "초기 포트 가정. 실제 환경 확인 후 확정"
+    },
+    {
+      "expected_rid": "R_050",
+      "ip": "192.168.20.100",
+      "ssh_port": 22,
+      "ssh_port_fallbacks": [
+        2222
+      ],
+      "credential_profile": "syscon-fleet",
+      "expected_model": null,
+      "enabled": true,
+      "note": "초기 포트 가정. 실제 환경 확인 후 확정"
+    }
+  ]
+}
