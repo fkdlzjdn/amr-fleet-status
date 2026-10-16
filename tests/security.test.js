@@ -5,6 +5,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 const http = require('node:http');
+const { spawnSync } = require('node:child_process');
+const { savePin } = require('../scripts/set-do-pin');
 const { DoControl } = require('../lib/do-control');
 const { Collector } = require('../lib/collector');
 const { IoService } = require('../lib/io-service');
@@ -16,6 +18,24 @@ const enabledEnv = { DO_CONTROL_ENABLED: 'true', DO_CONTROL_PIN: testPin };
 const inventory = inventoryFile(path.join(__dirname, '..')).slice(5, 7);
 const rawIo = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/r56-io-status.json'), 'utf8'));
 const command = () => ({ requestId: 'e'.repeat(32), deviceName: 'ezi_io_main', channel: 0, logicalName: 'front_reset', value: 1, expectedValue: 0 });
+
+test('PIN setup preserves SSH settings, replaces only control settings, and stores a private .env', t => {
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'amr-pin-setup-'));
+  t.after(() => fs.rmSync(folder, { recursive: true, force: true }));
+  const file = path.join(folder, '.env');
+  fs.writeFileSync(file, 'PORT=3100\nFLEET_SSH_KEY=/example/robot_key\n# keep this comment\nDO_CONTROL_PIN=000000\nDO_CONTROL_ENABLED=false\n');
+  savePin(folder, testPin);
+  const env = {}; loadEnv(file, env);
+  assert.equal(env.PORT, '3100'); assert.equal(env.FLEET_SSH_KEY, '/example/robot_key');
+  assert.equal(env.DO_CONTROL_PIN, testPin); assert.equal(env.DO_CONTROL_ENABLED, 'true');
+  assert.equal(fs.statSync(file).mode & 0o777, 0o600);
+  const content = fs.readFileSync(file, 'utf8');
+  assert.equal((content.match(/^DO_CONTROL_PIN=/gm) || []).length, 1);
+  assert.ok(content.includes('# keep this comment'));
+  assert.throws(() => savePin(folder, '123')); assert.equal(fs.readFileSync(file, 'utf8'), content);
+  const refused = spawnSync(process.execPath, [path.join(__dirname, '../scripts/set-do-pin.js')], { encoding: 'utf8', input: testPin });
+  assert.equal(refused.status, 1); assert.ok(!(refused.stdout + refused.stderr).includes(testPin));
+});
 
 async function fixture(t, options = {}) {
   let calls = 0;

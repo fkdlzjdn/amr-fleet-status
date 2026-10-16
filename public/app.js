@@ -59,20 +59,23 @@ function rememberLiveBatteries() {
   }
 }
 
-function updateBatteryDisplay(robot) {
-  const reading = document.querySelector(`[data-row="${robot.id}"] .battery-reading`);
-  if (reading) {
-    const template = document.createElement('template'); template.innerHTML = batteryBadge(robot.battery, robot.id);
-    const next = template.content.firstElementChild, trigger = reading.querySelector('[data-charge]');
+function patchBatteryReading(reading, next) {
+    const trigger = reading.querySelector('[data-charge]');
     const nextTrigger = next.querySelector('[data-charge]'), metrics = reading.querySelector('.battery-metrics');
     if (trigger && nextTrigger && metrics) {
       // Preserve the focused/clicked button while live battery values arrive.
       reading.className = next.className;
-      for (const attribute of ['class', 'title', 'aria-label']) trigger.setAttribute(attribute, nextTrigger.getAttribute(attribute));
+      for (const attribute of ['class', 'title', 'aria-label']) if (trigger.getAttribute(attribute) !== nextTrigger.getAttribute(attribute)) trigger.setAttribute(attribute, nextTrigger.getAttribute(attribute));
       if (trigger.innerHTML !== nextTrigger.innerHTML) trigger.innerHTML = nextTrigger.innerHTML;
       const content = next.querySelector('.battery-metrics').innerHTML;
       if (metrics.innerHTML !== content) metrics.innerHTML = content;
     } else reading.replaceWith(next);
+}
+function updateBatteryDisplay(robot) {
+  const reading = document.querySelector(`[data-row="${robot.id}"] .battery-reading`);
+  if (reading) {
+    const template = document.createElement('template'); template.innerHTML = batteryBadge(robot.battery, robot.id);
+    patchBatteryReading(reading, template.content.firstElementChild);
   }
   if (state.selected === robot.id && state.drawerMode !== 'io') renderDetail();
   else if (state.selected === robot.id && state.chargeControl) renderIoDetail(robot);
@@ -165,6 +168,7 @@ function renderModels() {
 }
 function renderFleet() {
   if (!state.snapshot) return;
+  if (state.fleetInteraction) { state.fleetRenderPending = true; return; }
   const focused = document.activeElement;
   const focusedSelector = focused?.dataset?.charge ? `[data-charge="${focused.dataset.charge}"]` : focused?.dataset?.io ? `[data-io="${focused.dataset.io}"]`
     : focused?.dataset?.robot ? `[data-robot="${focused.dataset.robot}"].${focused.classList.contains('robot-identity') ? 'robot-identity' : 'table-detail'}` : null;
@@ -173,11 +177,33 @@ function renderFleet() {
   $('reset-filters').hidden = state.ros === 'all' && state.model === 'all' && !state.search;
   $('table-container').hidden = !robots.length;
   $('empty-state').hidden = robots.length !== 0;
-  $('robot-table').innerHTML = robots.map(robot => {
+  const rows = robots.map(robot => {
     const arrived = state.initialized && state.lastObserved.get(robot.id) !== robot.observedAt;
     const bringup = robot.bringup === 'running' ? `<span class="pill good">${svg('check')}실행 중</span>` : `<span class="pill neutral">${robot.bringup === 'not_applicable' ? '해당 없음' : '실행 확인 안 됨'}</span>`;
     return `<tr class="robot-row${arrived ? ' just-updated' : ''}" data-row="${robot.id}"><td><button class="robot-identity" data-robot="${robot.id}" aria-label="${escapeHTML(displayRid(robot))} 상세 보기">${robotPicture(robot)}<span><strong>${escapeHTML(displayRid(robot))}</strong><code>${robot.ip}:${robot.port}</code></span></button></td><td><span class="pill ${robot.needsAttention ? 'warning' : 'good'}"><i class="dot ${dotClass(robot)}"></i>${statusLabel(robot)}</span></td><td><span class="model-name">${escapeHTML(robot.modelLabel)}</span></td><td>${rosBadge(robot)}<span class="distro-name">${escapeHTML(robot.distro || '배포판 미확인')}</span></td><td><span class="runtime-label ${robot.activeRos === 'ros1' || robot.activeRos === 'ros2' ? 'running' : ''}">${svg(robot.activeRos === 'ros1' || robot.activeRos === 'ros2' ? 'check' : 'info')}${robot.activeRos === 'stopped' ? '실행 안 됨' : robot.activeRos === 'unknown' ? '확인 안 됨' : `${rosLabels[robot.activeRos]} 실행`}</span></td><td>${servicePill(robot.service)}</td><td>${bringup}</td><td>${batteryBadge(robot.battery, robot.id)}</td><td><div class="row-actions">${ioButton(robot)}<button class="table-detail" data-robot="${robot.id}" aria-label="${escapeHTML(displayRid(robot))} 자세히 보기">자세히 ${svg('arrow')}</button></div></td></tr>`;
   }).join('');
+  const table = $('robot-table');
+  if (!table.rows) table.innerHTML = rows;
+  else {
+    const next = document.createElement('tbody'); next.innerHTML = rows;
+    const current = new Map([...table.rows].map(row => [row.dataset.row, row]));
+    const retained = new Set();
+    for (const [index, candidate] of [...next.rows].entries()) {
+      let row = current.get(candidate.dataset.row);
+      if (row) {
+        row.className = candidate.className;
+        for (let cell = 0; cell < candidate.cells.length; cell++) {
+          const oldReading = cell === 7 ? row.cells[cell].querySelector('.battery-reading') : null;
+          const newReading = cell === 7 ? candidate.cells[cell].querySelector('.battery-reading') : null;
+          if (oldReading && newReading) patchBatteryReading(oldReading, newReading);
+          else if (row.cells[cell].innerHTML !== candidate.cells[cell].innerHTML) row.cells[cell].innerHTML = candidate.cells[cell].innerHTML;
+        }
+      } else row = candidate;
+      retained.add(row.dataset.row);
+      if (table.rows[index] !== row) table.insertBefore(row, table.rows[index] || null);
+    }
+    for (const row of [...table.rows]) if (!retained.has(row.dataset.row)) row.remove();
+  }
   if (focusedSelector && !focused.isConnected) $('robot-table').querySelector(focusedSelector)?.focus({ preventScroll: true });
   for (const robot of state.snapshot.robots) state.lastObserved.set(robot.id, robot.observedAt);
   state.initialized = true;
@@ -328,6 +354,24 @@ function exportCSV() {
   toast(`현재 조회 목록 ${rows.length - 1}대를 CSV로 내보냈습니다.`);
 }
 async function init() {
+  // A full fleet update must not remove a button between pointer-down and click.
+  const releaseFleet = () => {
+    const interaction = state.fleetInteraction;
+    if (!interaction) return;
+    setTimeout(() => {
+      if (state.fleetInteraction !== interaction) return;
+      state.fleetInteraction = null;
+      if (state.fleetRenderPending) { state.fleetRenderPending = false; renderFleet(); }
+    }, 0);
+  };
+  const holdFleet = event => {
+    if (event.type === 'keydown' && ![' ', 'Enter'].includes(event.key)) return;
+    if (event.target.closest('#robot-table [data-charge], #robot-table [data-io], #robot-table [data-robot]')) state.fleetInteraction = {};
+  };
+  document.addEventListener('pointerdown', holdFleet, true);
+  document.addEventListener('keydown', holdFleet, true);
+  for (const name of ['pointerup', 'pointercancel', 'keyup']) document.addEventListener(name, releaseFleet, true);
+  window.addEventListener('blur', releaseFleet);
   document.addEventListener('click', event => {
     const charge = event.target.closest('[data-charge]'); if (charge && state.snapshot) { openDetail(charge.dataset.charge, 'charge'); return; }
     const io = event.target.closest('[data-io]'); if (io && state.snapshot) { openDetail(io.dataset.io, 'io'); return; }

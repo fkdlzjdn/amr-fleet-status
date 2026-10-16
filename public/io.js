@@ -55,6 +55,7 @@ function renderIoDetail(robot) {
   $('drawer-refresh').disabled = ioState.pending || Boolean(ioState.outputPending);
   const structure = JSON.stringify([chargeOnly, known, known ? [...io.diChannels, ...io.doChannels].map(ch => [ch.deviceName, ch.type, ch.channel, ch.logicalName]) : io.status]);
   if (ioState.layout !== structure) {
+    const previousGate = ioState.layout === null ? null : $('drawer-content').querySelector('.io-control-gate');
     ioState.layout = structure;
     $('drawer-content').innerHTML = `<div class="io-intro"><div><code>${escapeHTML(robot.ip)}:${robot.port}</code><span class="pill io-stream-status"></span></div><p>${chargeOnly ? '충전 상태를 확인하고 ON/OFF를 요청합니다.' : '입력과 출력의 현재 신호를 확인하세요.'}</p><small>연결을 유지해 IO 변화를 바로 전달합니다. 패널을 닫으면 연결을 마칩니다.</small></div>
       <div class="io-note">${chargeOnly ? '충전 ON/OFF는 charge_relay의 논리 출력을 요청합니다. 실제 충전 여부는 배터리 전류·BMS 수신값으로 확인합니다. 로봇의 기존 보호 조건에 따라 요청이 거부될 수 있습니다.' : '상태는 원시값이며 DO 버튼은 논리명 기준 ON/OFF입니다. 반전 설정에 따라 둘은 다를 수 있습니다. DO 제어는 모터 전원·충전 릴레이 등 연결 장치에 적용됩니다.'}</div>
@@ -62,12 +63,16 @@ function renderIoDetail(robot) {
         <div class="io-control-heading"><strong id="io-control-status"></strong><button id="io-control-lock" class="button secondary" type="button" hidden>제어 잠금</button></div>
         <p id="io-control-description"></p>
         <form id="io-pin-form" hidden autocomplete="off"><label for="io-pin">DO 제어 PIN</label><div><input id="io-pin" type="password" inputmode="numeric" pattern="[0-9]{6,12}" minlength="6" maxlength="12" required autocomplete="off" spellcheck="false" placeholder="6~12자리 숫자"><button id="io-pin-submit" class="button primary" type="submit">잠금 해제</button></div></form>
+        <details id="io-pin-setup"><summary>서버 관리자: PIN 최초 설정 방법</summary><p>서버의 프로젝트 폴더에서 아래 명령을 실행해 직접 정한 PIN을 두 번 입력하세요. 입력 문자는 화면에 표시하지 않습니다.</p><pre>npm run set-pin</pre><p>설정 후 서버를 재시작하고 이 페이지를 새로고침하세요. .50 공용 서버는 다음 명령으로 재시작합니다.</p><pre>systemctl --user restart amr-fleet-status</pre><p>PIN은 서버 .env에 권한 600으로 저장합니다. 소스·채팅에 입력할 필요가 없습니다.</p></details>
         <p id="io-pin-feedback" role="status"></p>
       </section>
       <p class="io-output-feedback" role="status" hidden></p>
       ${chargeOnly ? `<section class="charge-control-panel" aria-label="충전 ON/OFF"><div class="charge-measurement"><span>현재 충전 상태</span><div id="charge-measured-state"></div></div><p id="charge-relay-state"></p><div class="charge-actions"><button type="button" data-charge-output="1" disabled>충전 ON</button><button type="button" data-charge-output="0" disabled>충전 OFF</button></div><p id="charge-availability" role="status"></p><small>릴레이 확인 응답을 실제 충전 시작·정지로 간주하지 않습니다. 전류 반영에는 장비의 발행 주기만큼 시간이 걸립니다.</small></section>` : ''}
       ${known ? chargeOnly ? '' : `<div class="io-overview"></div>${ioDeviceBoards(io)}<p class="io-notice io-invalid-notice" hidden>유효하지 않은 채널은 미확인으로 표시합니다.</p>` : `<p class="io-notice" role="status">${escapeHTML(ioReasons[io.status] || ioReasons.unavailable)}</p>`}
       <dl class="io-source">${detailRows([['노드', io.node || '미확인'], ['토픽', io.topic || '미확인']])}</dl>`;
+    // Preserve typed input and expanded setup guidance across IO schema/status updates.
+    // A new robot/stream resets layout and deliberately creates an empty gate.
+    if (previousGate) $('drawer-content').querySelector('.io-control-gate').replaceWith(previousGate);
     $('io-pin-form').onsubmit = unlockIoControl;
     $('io-control-lock').onclick = lockIoControl;
   }
@@ -76,11 +81,13 @@ function renderIoDetail(robot) {
   $('io-control-status').textContent = !enabled ? 'DO 제어 비활성화 · 조회 전용' : unlocked ? 'DO 제어 활성 · PIN 인증 완료' : 'DO 제어 잠김';
   $('io-control-description').textContent = !enabled ? '서버 관리자가 .env에서 PIN을 설정하고 DO 제어를 활성화해야 합니다.'
     : unlocked ? '인증은 이 IO 화면에서 최대 5분간 유효합니다. 패널을 닫거나 재연결하면 잠깁니다.' : '관리자가 정한 PIN으로 이 화면의 출력 제어를 잠금 해제하세요. IO 조회는 계속 사용할 수 있습니다.';
-  $('io-pin-form').hidden = !enabled || unlocked;
+  $('io-pin-form').hidden = unlocked;
+  $('io-pin-setup').hidden = enabled;
   $('io-control-lock').hidden = !unlocked;
   $('io-control-lock').disabled = Boolean(ioState.outputPending);
-  $('io-pin-submit').disabled = ioState.authPending || !io.controlToken;
-  $('io-pin').disabled = ioState.authPending || !io.controlToken;
+  $('io-pin-submit').disabled = !enabled || ioState.authPending || !io.controlToken;
+  $('io-pin').disabled = !enabled || ioState.authPending || !io.controlToken;
+  $('io-pin').placeholder = enabled ? '6~12자리 숫자' : '서버 관리자 PIN 설정 필요';
   $('io-pin-feedback').textContent = ioState.authMessage;
   const badge = $('drawer-content').querySelector('.io-stream-status');
   badge.textContent = known ? '실시간 수신 중' : io.status === 'loading' ? '연결 중' : 'IO 미확인';

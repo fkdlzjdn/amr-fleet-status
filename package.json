@@ -5,6 +5,7 @@
   "description": "AMR Fleet Status — ROS1/ROS2 fleet monitoring, live battery and IO control",
   "scripts": {
     "start": "node server.js",
+    "set-pin": "node scripts/set-do-pin.js",
     "test": "node --test tests/*.test.js"
   },
   "engines": {
