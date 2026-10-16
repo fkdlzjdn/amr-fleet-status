@@ -20,6 +20,10 @@ const ioReasons = { paused: '탭이 숨겨져 IO 연결을 일시 정지했습�
   auth_failed: 'SSH 인증에 실패했습니다.', host_key_unknown: 'SSH 호스트키가 등록되지 않았습니다.',
   host_key_mismatch: 'SSH 호스트키가 기존 등록값과 다릅니다.', unavailable: '현재 IO 상태를 확인할 수 없습니다.' };
 const ioChannelKey = channel => `${channel.deviceName}:${channel.type}:${channel.channel}`;
+function chargingChannel(io) {
+  const channels = [...(io.diChannels || []), ...(io.doChannels || [])].filter(channel => channel.logicalName === 'charge_relay');
+  return channels.length === 1 && channels[0].type === 'DO' && channels[0].isValid ? channels[0] : null;
+}
 function ioView(value, now = Date.now()) {
   if (!value) return { status: 'loading', diChannels: [], doChannels: [] };
   if (['observed', 'partial'].includes(value.status) && (!Number.isFinite(Date.parse(value.checkedAt))
@@ -45,14 +49,15 @@ function ioDeviceBoards(io) {
 }
 function renderIoDetail(robot) {
   const io = ioView(ioState.value), known = ['observed', 'partial'].includes(io.status);
-  $('drawer-title').textContent = `${displayRid(robot)} · IO 체크`;
+  const chargeOnly = Boolean(state.chargeControl);
+  $('drawer-title').textContent = `${displayRid(robot)} · ${chargeOnly ? '충전 제어' : 'IO 체크'}`;
   $('drawer-check-time').textContent = ioState.pending ? 'IO 연결 중…' : io.checkedAt ? `수신 ${timeLabel(io.checkedAt)}${io.live && io.intervalMs > 0 ? ` · ${Math.round(io.intervalMs)} ms 주기` : ''}` : '첫 IO 수신 대기';
   $('drawer-refresh').disabled = ioState.pending || Boolean(ioState.outputPending);
-  const structure = JSON.stringify([known, known ? [...io.diChannels, ...io.doChannels].map(ch => [ch.deviceName, ch.type, ch.channel, ch.logicalName]) : io.status]);
+  const structure = JSON.stringify([chargeOnly, known, known ? [...io.diChannels, ...io.doChannels].map(ch => [ch.deviceName, ch.type, ch.channel, ch.logicalName]) : io.status]);
   if (ioState.layout !== structure) {
     ioState.layout = structure;
-    $('drawer-content').innerHTML = `<div class="io-intro"><div><code>${escapeHTML(robot.ip)}:${robot.port}</code><span class="pill io-stream-status"></span></div><p>입력과 출력의 현재 신호를 확인하세요.</p><small>연결을 유지해 IO 변화를 바로 전달합니다. 패널을 닫으면 연결을 마칩니다.</small></div>
-      <div class="io-note">상태는 원시값이며 DO 버튼은 논리명 기준 ON/OFF입니다. 반전 설정에 따라 둘은 다를 수 있습니다. DO 제어는 모터 전원·충전 릴레이 등 연결 장치에 적용됩니다.</div>
+    $('drawer-content').innerHTML = `<div class="io-intro"><div><code>${escapeHTML(robot.ip)}:${robot.port}</code><span class="pill io-stream-status"></span></div><p>${chargeOnly ? '충전 상태를 확인하고 ON/OFF를 요청합니다.' : '입력과 출력의 현재 신호를 확인하세요.'}</p><small>연결을 유지해 IO 변화를 바로 전달합니다. 패널을 닫으면 연결을 마칩니다.</small></div>
+      <div class="io-note">${chargeOnly ? '충전 ON/OFF는 charge_relay의 논리 출력을 요청합니다. 실제 충전 여부는 배터리 전류·BMS 수신값으로 확인합니다. 로봇의 기존 보호 조건에 따라 요청이 거부될 수 있습니다.' : '상태는 원시값이며 DO 버튼은 논리명 기준 ON/OFF입니다. 반전 설정에 따라 둘은 다를 수 있습니다. DO 제어는 모터 전원·충전 릴레이 등 연결 장치에 적용됩니다.'}</div>
       <section class="io-control-gate" aria-label="DO 제어 잠금">
         <div class="io-control-heading"><strong id="io-control-status"></strong><button id="io-control-lock" class="button secondary" type="button" hidden>제어 잠금</button></div>
         <p id="io-control-description"></p>
@@ -60,7 +65,8 @@ function renderIoDetail(robot) {
         <p id="io-pin-feedback" role="status"></p>
       </section>
       <p class="io-output-feedback" role="status" hidden></p>
-      ${known ? `<div class="io-overview"></div>${ioDeviceBoards(io)}<p class="io-notice io-invalid-notice" hidden>유효하지 않은 채널은 미확인으로 표시합니다.</p>` : `<p class="io-notice" role="status">${escapeHTML(ioReasons[io.status] || ioReasons.unavailable)}</p>`}
+      ${chargeOnly ? `<section class="charge-control-panel" aria-label="충전 ON/OFF"><div class="charge-measurement"><span>현재 충전 상태</span><div id="charge-measured-state"></div></div><p id="charge-relay-state"></p><div class="charge-actions"><button type="button" data-charge-output="1" disabled>충전 ON</button><button type="button" data-charge-output="0" disabled>충전 OFF</button></div><p id="charge-availability" role="status"></p><small>릴레이 확인 응답을 실제 충전 시작·정지로 간주하지 않습니다. 전류 반영에는 장비의 발행 주기만큼 시간이 걸립니다.</small></section>` : ''}
+      ${known ? chargeOnly ? '' : `<div class="io-overview"></div>${ioDeviceBoards(io)}<p class="io-notice io-invalid-notice" hidden>유효하지 않은 채널은 미확인으로 표시합니다.</p>` : `<p class="io-notice" role="status">${escapeHTML(ioReasons[io.status] || ioReasons.unavailable)}</p>`}
       <dl class="io-source">${detailRows([['노드', io.node || '미확인'], ['토픽', io.topic || '미확인']])}</dl>`;
     $('io-pin-form').onsubmit = unlockIoControl;
     $('io-control-lock').onclick = lockIoControl;
@@ -83,6 +89,17 @@ function renderIoDetail(robot) {
   feedback.hidden = !ioState.outputPending && !ioState.outputResult;
   feedback.className = `io-output-feedback ${ioState.outputResult?.status || 'pending'}`;
   feedback.textContent = ioState.outputPending ? `${ioState.outputPending.logicalName} · 논리 ${ioState.outputPending.value ? 'ON' : 'OFF'} 요청 중…` : ioState.outputResult?.text || '';
+  if (chargeOnly) {
+    const channel = chargingChannel(io), current = robot.battery?.current;
+    const measured = `${batteryChargeBadge(robot.battery)}${Number.isFinite(current) ? `<code>${current > 0 ? '+' : ''}${current.toFixed(2)} A</code>` : ''}`;
+    if ($('charge-measured-state').innerHTML !== measured) $('charge-measured-state').innerHTML = measured;
+    $('charge-relay-state').textContent = channel ? `charge_relay · 원시값 ${channel.value === 1 ? 'ON · 1' : 'OFF · 0'} (논리 제어와 반전될 수 있음)` : 'charge_relay · 수신 미확인';
+    const ready = known && channel && unlocked && io.controlToken && !ioState.outputPending;
+    for (const button of $('drawer-content').querySelectorAll('[data-charge-output]')) button.disabled = !ready;
+    $('charge-availability').textContent = !known ? ioReasons[io.status] || ioReasons.unavailable : !channel ? '유일하고 유효한 charge_relay DO가 없어 충전 제어를 지원하지 않습니다.'
+      : !enabled ? '서버 PIN 설정 후 충전 제어를 사용할 수 있습니다.' : !unlocked ? 'PIN 인증 후 충전 ON/OFF를 선택하세요.' : ioState.outputPending ? '충전 요청 결과 확인 중…' : '충전 ON 또는 OFF를 명시적으로 선택하세요.';
+    return;
+  }
   if (!known) return;
   const channels = [...io.diChannels, ...io.doChannels], byKey = new Map(channels.map(ch => [ioChannelKey(ch), ch]));
   for (const row of $('drawer-content').querySelectorAll('.io-channel')) {
@@ -208,12 +225,13 @@ async function lockIoControl() {
   fetchIo();
 }
 
-async function setIoOutput(key, value) {
+async function setIoOutput(key, value, charging = false) {
   const io = ioView(ioState.value);
   if (ioState.outputPending || state.drawerMode !== 'io' || !state.selected || !['observed', 'partial'].includes(io.status) || !io.controlToken
     || !io.controlAuthorized || ioState.authorizedUntil <= Date.now()) return;
   const channel = io.doChannels.find(ch => ioChannelKey(ch) === key);
   if (!channel?.isValid || !channel.logicalName) return;
+  if (charging && chargingChannel(io) !== channel) return;
   const bytes = crypto.getRandomValues(new Uint8Array(16));
   const requestId = [...bytes].map(byte => byte.toString(16).padStart(2, '0')).join('');
   const id = state.selected;
@@ -221,16 +239,16 @@ async function setIoOutput(key, value) {
   ioState.outputPending = command; ioState.outputResult = null; renderDetail();
   let result;
   try {
-    const response = await fetch(`/api/robots/${encodeURIComponent(id)}/io/output`, {
+    const response = await fetch(`/api/robots/${encodeURIComponent(id)}/io/${charging ? 'charge' : 'output'}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'X-IO-Control-Token': io.controlToken },
-      body: JSON.stringify(command), signal: AbortSignal.timeout(8000)
+      body: JSON.stringify(charging ? { requestId, value, expectedValue: channel.value } : command), signal: AbortSignal.timeout(8000)
     });
     const data = await response.json();
     if (data.pinRequired && ioState.value?.controlToken === io.controlToken) {
       ioState.authorizedUntil = 0; ioState.value.controlAuthorized = false;
     }
     const status = ['confirmed', 'rejected', 'unconfirmed'].includes(data.status) ? data.status : response.ok || response.status >= 500 ? 'unconfirmed' : 'rejected';
-    const text = status === 'confirmed' ? `${channel.logicalName} · 논리 ${value ? 'ON' : 'OFF'} 확인`
+    const text = status === 'confirmed' ? charging ? `충전 릴레이 논리 ${value ? 'ON' : 'OFF'} 확인 · 실제 충전 상태는 전류·BMS 표시를 확인하세요.` : `${channel.logicalName} · 논리 ${value ? 'ON' : 'OFF'} 확인`
       : status === 'rejected' ? `${channel.logicalName} · 요청 거부/실패: ${data.error || data.message || '드라이버 응답을 확인하세요.'}`
       : `${channel.logicalName} · 결과 미확인. 자동 재전송하지 않습니다.`;
     result = { status, text };
@@ -242,6 +260,12 @@ async function setIoOutput(key, value) {
   } else toast(`${id} · ${result.text}`);
 }
 document.addEventListener('click', event => {
+  const charge = event.target.closest('[data-charge-output]');
+  if (charge && !charge.disabled) {
+    const channel = chargingChannel(ioView(ioState.value));
+    if (channel) setIoOutput(ioChannelKey(channel), Number(charge.dataset.chargeOutput), true);
+    return;
+  }
   const button = event.target.closest('[data-io-output]');
   if (!button || button.disabled) return;
   const row = button.closest('[data-io-channel]');

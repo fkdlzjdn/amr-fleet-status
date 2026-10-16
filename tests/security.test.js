@@ -19,11 +19,12 @@ const command = () => ({ requestId: 'e'.repeat(32), deviceName: 'ezi_io_main', c
 
 async function fixture(t, options = {}) {
   let calls = 0;
+  const commands = [];
   const collector = new Collector(inventory, { statePath: '/nonexistent/pin-test.json' });
   const ioService = new IoService({ openStream: (_robot, packet) => {
     queueMicrotask(() => packet({ ok: true, payload: { io: { ...rawIo, status: 'observed', message_age_seconds: 0.01 } } }));
     return { close() {}, setOutput: async cmd => {
-      calls++; return { request_id: cmd.requestId, status: 'confirmed', logical_value: cmd.value };
+      calls++; commands.push(cmd); return { request_id: cmd.requestId, status: 'confirmed', logical_value: cmd.value };
     } };
   } });
   const doControl = options.doControl || new DoControl(enabledEnv);
@@ -41,7 +42,7 @@ async function fixture(t, options = {}) {
     const value = JSON.parse(text.split('\n').find(line => line.startsWith('data: ')).slice(6));
     return { token: value.controlToken, value, close: () => reader.cancel() };
   }
-  return { url, post, viewer, collector, ioService, server, get calls() { return calls; } };
+  return { url, post, viewer, collector, ioService, server, commands, get calls() { return calls; } };
 }
 
 test('DO defaults to disabled and .env can explicitly configure a valid PIN without exposing it', async t => {
@@ -62,7 +63,24 @@ test('DO defaults to disabled and .env can explicitly configure a valid PIN with
   const v = await f.viewer(); assert.equal(v.value.controlEnabled, false);
   assert.equal((await f.post('unlock', v.token, { pin: testPin })).status, 403);
   assert.equal((await f.post('output', v.token, command())).status, 403);
+  assert.equal((await f.post('charge', v.token, { requestId: 'f'.repeat(32), value: 1, expectedValue: 0 })).status, 403);
   assert.equal(f.calls, 0); await v.close();
+});
+
+test('charging endpoint requires PIN and chooses only charge_relay on the server', async t => {
+  const f = await fixture(t), v = await f.viewer();
+  const charge = { requestId: 'f'.repeat(32), value: 1, expectedValue: 0 };
+  assert.equal((await f.post('charge', v.token, charge)).status, 403); assert.equal(f.calls, 0);
+  await f.post('unlock', v.token, { pin: testPin });
+  assert.equal((await f.post('charge', v.token, { ...charge, logicalName: 'front_reset' })).status, 400);
+  assert.equal(f.calls, 0);
+  const result = await f.post('charge', v.token, charge); assert.equal(result.status, 200);
+  assert.equal((await result.json()).status, 'confirmed');
+  assert.equal(f.commands[0].logicalName, 'charge_relay'); assert.equal(f.commands[0].channel, 1);
+  await f.post('charge', v.token, charge); assert.equal(f.calls, 1);
+  await f.post('lock', v.token);
+  assert.equal((await f.post('charge', v.token, charge)).status, 403); assert.equal(f.calls, 1);
+  await v.close();
 });
 
 test('PIN unlock authorizes only that viewer/robot, expires, locks and never appears in responses', async t => {

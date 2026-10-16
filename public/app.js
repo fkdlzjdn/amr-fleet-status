@@ -25,7 +25,7 @@ function batteryChargeSource(battery) {
 }
 function batteryKnown(battery) { return battery?.status === 'observed' && Number.isFinite(battery.percent) && battery.percent >= 0 && battery.percent <= 100; }
 function batteryLabel(battery) { return batteryKnown(battery) ? `${battery.percent.toLocaleString('ko-KR', { maximumFractionDigits: 1 })}%` : '미확인'; }
-function batteryChargeBadge(battery) {
+function batteryChargeBadge(battery, robotId = null) {
   const full = battery?.charging === false && (battery.chargingState === 'full' || (battery.chargingSource !== 'battery_current' && battery.powerSupplyStatus === 4));
   const kind = battery?.charging === true ? 'charging' : full ? 'full' : battery?.charging === false ? 'not-charging' : 'unknown';
   const label = { charging: '충전 중', 'not-charging': '충전 안 함', full: '충전 완료', unknown: '충전 미확인' }[kind];
@@ -33,17 +33,19 @@ function batteryChargeBadge(battery) {
     'not-charging': '<path d="M9 3v4m6-4v4M7 7h10v4a5 5 0 0 1-10 0V7Zm5 9v5M3 3l18 18"/>',
     full: '<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>',
     unknown: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 2-2.5 2-2.5 4m0 3v.1"/>' };
-  return `<span class="battery-charge ${kind}" title="${escapeHTML(batteryChargeLabel(battery))}"><svg viewBox="0 0 24 24" aria-hidden="true">${paths[kind]}</svg><b>${label}</b></span>`;
+  const content = `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[kind]}</svg><b>${label}</b>`;
+  return robotId ? `<button type="button" class="battery-charge ${kind} charge-control-trigger" data-charge="${escapeHTML(robotId)}" title="충전 ON/OFF 제어 열기 · ${escapeHTML(batteryChargeLabel(battery))}" aria-label="${escapeHTML(robotId)} ${label} · 충전 ON/OFF 제어 열기">${content}<span class="charge-trigger-hint">제어 ↗</span></button>`
+    : `<span class="battery-charge ${kind}" title="${escapeHTML(batteryChargeLabel(battery))}">${content}</span>`;
 }
-function batteryBadge(battery) {
-  const charge = batteryChargeBadge(battery);
+function batteryBadge(battery, robotId = null) {
+  const charge = batteryChargeBadge(battery, robotId);
   const current = battery?.chargingSource === 'battery_current' && Number.isFinite(battery.current)
     ? `<small class="battery-charge-note">${battery.current > 0 ? '+' : ''}${battery.current.toLocaleString('ko-KR', { maximumFractionDigits: 2 })} A${battery.chargingState === 'discharging' ? ' · 방전 중' : ''}</small>` : '';
   const liveLabel = battery?.live ? '실시간 수신' : { connecting: '실시간 연결 중', reconnecting: '다시 연결 중', paused: '갱신 정지', stale: '수신 지연', unavailable: '수신 미확인' }[battery?.liveStatus]
     || (batteryKnown(battery) ? '주기 조회' : '');
   const live = liveLabel ? `<small class="battery-live-status${battery?.live ? ' live' : ''}">${battery?.live ? '<i aria-hidden="true"></i>' : ''}${liveLabel}</small>` : '';
-  if (!batteryKnown(battery)) return `<span class="battery-reading">${charge}<span class="battery-unknown" title="${escapeHTML(batteryReasons[battery?.status] || batteryReasons.unavailable)}">잔량 미확인</span>${current}${live}</span>`;
-  return `<span class="battery-reading${battery.percent <= 20 ? ' low' : ''}">${charge}<span class="battery-level"><meter min="0" max="100" low="20" high="100" optimum="100" value="${battery.percent}" aria-label="배터리 잔량 ${batteryLabel(battery)}"></meter><strong>${batteryLabel(battery)}</strong></span>${current}${live}</span>`;
+  if (!batteryKnown(battery)) return `<span class="battery-reading">${charge}<span class="battery-metrics"><span class="battery-unknown" title="${escapeHTML(batteryReasons[battery?.status] || batteryReasons.unavailable)}">잔량 미확인</span>${current}${live}</span></span>`;
+  return `<span class="battery-reading${battery.percent <= 20 ? ' low' : ''}">${charge}<span class="battery-metrics"><span class="battery-level"><meter min="0" max="100" low="20" high="100" optimum="100" value="${battery.percent}" aria-label="배터리 잔량 ${batteryLabel(battery)}"></meter><strong>${batteryLabel(battery)}</strong></span>${current}${live}</span></span>`;
 }
 let toastTimer, refreshTimer, lastFocused, eventSource, batteryAgeTimer;
 const batteryReceipts = new Map();
@@ -59,8 +61,21 @@ function rememberLiveBatteries() {
 
 function updateBatteryDisplay(robot) {
   const reading = document.querySelector(`[data-row="${robot.id}"] .battery-reading`);
-  if (reading) reading.outerHTML = batteryBadge(robot.battery);
+  if (reading) {
+    const template = document.createElement('template'); template.innerHTML = batteryBadge(robot.battery, robot.id);
+    const next = template.content.firstElementChild, trigger = reading.querySelector('[data-charge]');
+    const nextTrigger = next.querySelector('[data-charge]'), metrics = reading.querySelector('.battery-metrics');
+    if (trigger && nextTrigger && metrics) {
+      // Preserve the focused/clicked button while live battery values arrive.
+      reading.className = next.className;
+      for (const attribute of ['class', 'title', 'aria-label']) trigger.setAttribute(attribute, nextTrigger.getAttribute(attribute));
+      if (trigger.innerHTML !== nextTrigger.innerHTML) trigger.innerHTML = nextTrigger.innerHTML;
+      const content = next.querySelector('.battery-metrics').innerHTML;
+      if (metrics.innerHTML !== content) metrics.innerHTML = content;
+    } else reading.replaceWith(next);
+  }
   if (state.selected === robot.id && state.drawerMode !== 'io') renderDetail();
+  else if (state.selected === robot.id && state.chargeControl) renderIoDetail(robot);
 }
 function receiveBattery(value) {
   if (!state.snapshot || !state.follow) return;
@@ -151,7 +166,7 @@ function renderModels() {
 function renderFleet() {
   if (!state.snapshot) return;
   const focused = document.activeElement;
-  const focusedSelector = focused?.dataset?.io ? `[data-io="${focused.dataset.io}"]`
+  const focusedSelector = focused?.dataset?.charge ? `[data-charge="${focused.dataset.charge}"]` : focused?.dataset?.io ? `[data-io="${focused.dataset.io}"]`
     : focused?.dataset?.robot ? `[data-robot="${focused.dataset.robot}"].${focused.classList.contains('robot-identity') ? 'robot-identity' : 'table-detail'}` : null;
   const robots = filteredRobots();
   $('visible-count').textContent = robots.length;
@@ -161,7 +176,7 @@ function renderFleet() {
   $('robot-table').innerHTML = robots.map(robot => {
     const arrived = state.initialized && state.lastObserved.get(robot.id) !== robot.observedAt;
     const bringup = robot.bringup === 'running' ? `<span class="pill good">${svg('check')}실행 중</span>` : `<span class="pill neutral">${robot.bringup === 'not_applicable' ? '해당 없음' : '실행 확인 안 됨'}</span>`;
-    return `<tr class="robot-row${arrived ? ' just-updated' : ''}" data-row="${robot.id}"><td><button class="robot-identity" data-robot="${robot.id}" aria-label="${escapeHTML(displayRid(robot))} 상세 보기">${robotPicture(robot)}<span><strong>${escapeHTML(displayRid(robot))}</strong><code>${robot.ip}:${robot.port}</code></span></button></td><td><span class="pill ${robot.needsAttention ? 'warning' : 'good'}"><i class="dot ${dotClass(robot)}"></i>${statusLabel(robot)}</span></td><td><span class="model-name">${escapeHTML(robot.modelLabel)}</span></td><td>${rosBadge(robot)}<span class="distro-name">${escapeHTML(robot.distro || '배포판 미확인')}</span></td><td><span class="runtime-label ${robot.activeRos === 'ros1' || robot.activeRos === 'ros2' ? 'running' : ''}">${svg(robot.activeRos === 'ros1' || robot.activeRos === 'ros2' ? 'check' : 'info')}${robot.activeRos === 'stopped' ? '실행 안 됨' : robot.activeRos === 'unknown' ? '확인 안 됨' : `${rosLabels[robot.activeRos]} 실행`}</span></td><td>${servicePill(robot.service)}</td><td>${bringup}</td><td>${batteryBadge(robot.battery)}</td><td><div class="row-actions">${ioButton(robot)}<button class="table-detail" data-robot="${robot.id}" aria-label="${escapeHTML(displayRid(robot))} 자세히 보기">자세히 ${svg('arrow')}</button></div></td></tr>`;
+    return `<tr class="robot-row${arrived ? ' just-updated' : ''}" data-row="${robot.id}"><td><button class="robot-identity" data-robot="${robot.id}" aria-label="${escapeHTML(displayRid(robot))} 상세 보기">${robotPicture(robot)}<span><strong>${escapeHTML(displayRid(robot))}</strong><code>${robot.ip}:${robot.port}</code></span></button></td><td><span class="pill ${robot.needsAttention ? 'warning' : 'good'}"><i class="dot ${dotClass(robot)}"></i>${statusLabel(robot)}</span></td><td><span class="model-name">${escapeHTML(robot.modelLabel)}</span></td><td>${rosBadge(robot)}<span class="distro-name">${escapeHTML(robot.distro || '배포판 미확인')}</span></td><td><span class="runtime-label ${robot.activeRos === 'ros1' || robot.activeRos === 'ros2' ? 'running' : ''}">${svg(robot.activeRos === 'ros1' || robot.activeRos === 'ros2' ? 'check' : 'info')}${robot.activeRos === 'stopped' ? '실행 안 됨' : robot.activeRos === 'unknown' ? '확인 안 됨' : `${rosLabels[robot.activeRos]} 실행`}</span></td><td>${servicePill(robot.service)}</td><td>${bringup}</td><td>${batteryBadge(robot.battery, robot.id)}</td><td><div class="row-actions">${ioButton(robot)}<button class="table-detail" data-robot="${robot.id}" aria-label="${escapeHTML(displayRid(robot))} 자세히 보기">자세히 ${svg('arrow')}</button></div></td></tr>`;
   }).join('');
   if (focusedSelector && !focused.isConnected) $('robot-table').querySelector(focusedSelector)?.focus({ preventScroll: true });
   for (const robot of state.snapshot.robots) state.lastObserved.set(robot.id, robot.observedAt);
@@ -213,7 +228,7 @@ function renderDetail() {
     <div class="detail-visual">${robotPicture(robot, true)}<div><div class="detail-title">${escapeHTML(robot.modelLabel)}</div><span class="detail-visual-caption">${rosLabels[robot.configuredRos]} · ${escapeHTML(robot.distro || '배포판 미확인')}</span></div></div><p class="detail-subtitle">${escapeHTML(robot.evidence)}</p>
     ${robot.issues.length ? `<div class="issue-list">${robot.issues.map(issue => `<p>${escapeHTML(issue)}</p>`).join('')}</div>` : ''}
     <div class="detail-actions">${ioButton(robot, true)}</div>
-    <section class="detail-section"><h3>배터리 ${batteryBadge(battery)}</h3><dl>${detailRows([['잔량', batteryLabel(battery)], ['충전 상태', batteryChargeLabel(battery)], ['판정 근거', batteryChargeSource(battery)], ['BMS 상태값', batteryPowerLabels[battery?.powerSupplyStatus] || '미확인'], ['IO 충전 신호', battery?.ioCharging?.status === 'observed' ? battery.ioCharging.charging ? 'ON' : 'OFF' : '미확인'], ['신호 비교', battery?.chargingConflict ? '전류 / BMS / IO 정보가 다름' : '확인된 정보 기준'], ['전압', battery?.voltage != null ? `${battery.voltage.toFixed(2)} V` : '미확인'], ['전류', battery?.current != null ? `${battery.current.toFixed(2)} A` : '미확인'], ['조회 결과', batteryKnown(battery) ? '실제 배터리 메시지 수신' : batteryReasons[battery?.status] || batteryReasons.unavailable], ['확인 시각', battery?.observedAt ? timeLabel(battery.observedAt) : '미확인'], ['배터리 토픽', battery?.topic || '미확인'], ['IO 충전 토픽', battery?.ioCharging?.topic || '미확인']])}</dl></section>
+    <section class="detail-section"><h3>배터리 ${batteryBadge(battery, robot.id)}</h3><dl>${detailRows([['잔량', batteryLabel(battery)], ['충전 상태', batteryChargeLabel(battery)], ['판정 근거', batteryChargeSource(battery)], ['BMS 상태값', batteryPowerLabels[battery?.powerSupplyStatus] || '미확인'], ['IO 충전 신호', battery?.ioCharging?.status === 'observed' ? battery.ioCharging.charging ? 'ON' : 'OFF' : '미확인'], ['신호 비교', battery?.chargingConflict ? '전류 / BMS / IO 정보가 다름' : '확인된 정보 기준'], ['전압', battery?.voltage != null ? `${battery.voltage.toFixed(2)} V` : '미확인'], ['전류', battery?.current != null ? `${battery.current.toFixed(2)} A` : '미확인'], ['조회 결과', batteryKnown(battery) ? '실제 배터리 메시지 수신' : batteryReasons[battery?.status] || batteryReasons.unavailable], ['확인 시각', battery?.observedAt ? timeLabel(battery.observedAt) : '미확인'], ['배터리 토픽', battery?.topic || '미확인'], ['IO 충전 토픽', battery?.ioCharging?.topic || '미확인']])}</dl></section>
     <section class="detail-section"><h3>로봇 식별 <small>등록값 / 실제 관측</small></h3><dl>${detailRows([['계획 RID', robot.plannedRid || '매핑 없음'], ['관측 RID', robot.observedRid || '미확인'], ['RID 일치', mismatch ? '불일치 · 확인 필요' : robot.observedRid && robot.plannedRid ? '일치' : '해당 없음 / 미확인'], ['hostname', d.hostname || '미확인'], ['운영체제', d.os?.PRETTY_NAME || '미확인'], ['모델 원문', robot.model || '미확인'], ['모델 출처', robot.sources?.model?.[0]?.source || '미확인'], ['RID 출처', robot.sources?.rid || '미확인']])}</dl></section>
     <section class="detail-section"><h3>ROS 설정과 실행 ${rosBadge(robot)}</h3><dl>${detailRows([['설정 ROS', rosLabels[robot.configuredRos]], ['배포판', robot.distro || '미확인'], ['실행 ROS', rosLabels[robot.activeRos]], ['설치 목록', d.installedDistros?.join(', ') || '미확인'], ['판정 근거', robot.sources?.ros || '미확인'], ['ROS 프로세스', d.processCount === undefined ? '미확인' : `${d.processCount}개 · graph 정상 여부는 별도`]])}</dl></section>
     <section class="detail-section"><h3>서비스 상태 <small>scorpion과 bringup은 별개</small></h3><dl>${detailRows([['scorpion', serviceLabels[robot.service]], ['LoadState', raw.load_state || '미확인'], ['Active / SubState', raw.active_state ? `${raw.active_state} / ${raw.sub_state}` : '미확인'], ['부팅 시 자동 시작', raw.unit_file_state || '미확인 / 해당 없음'], ['Main PID', raw.main_pid ?? '미확인'], ['ROS2 bringup', robot.bringup === 'running' ? '실행 중' : robot.bringup === 'not_applicable' ? '해당 없음' : robot.bringup === 'stopped' ? '실행 미확인' : '미확인'], ['SSH 상태', robot.ssh === 'connected' ? '인증 / 조회 성공' : robot.ssh], ['호스트키 지문', d.fingerprint || '기존 known_hosts 검증'], ['최근 성공 확인', robot.observedAt ? timeLabel(robot.observedAt) : '미확인']])}</dl></section>
@@ -225,9 +240,11 @@ function openDetail(id, mode = 'detail') {
   if (!state.snapshot.robots.some(robot => robot.id === id)) return;
   stopIo();
   if (state.selected !== id) lastFocused = document.activeElement;
+  state.chargeControl = mode === 'charge';
+  if (state.chargeControl) mode = 'io';
   state.selected = id; state.drawerMode = mode;
   $('detail-drawer').classList.toggle('io-mode', mode === 'io');
-  $('drawer-mode-label').textContent = mode === 'io' ? 'IO CHECK · 상태 조회 / DO 제어' : 'ROBOT DETAILS · 상태 조회';
+  $('drawer-mode-label').textContent = state.chargeControl ? 'CHARGE CONTROL · 충전 ON/OFF' : mode === 'io' ? 'IO CHECK · 상태 조회 / DO 제어' : 'ROBOT DETAILS · 상태 조회';
   $('drawer-refresh').innerHTML = `${svg('refresh')}${mode === 'io' ? 'IO 다시 연결' : '이 로봇 다시 조회'}`;
   $('drawer-refresh').disabled = false;
   renderDetail(); renderFleet();
@@ -236,11 +253,11 @@ function openDetail(id, mode = 'detail') {
   if (mode === 'io') startIo();
 }
 function closeDetail() {
-  stopIo(); state.drawerMode = 'detail'; $('detail-drawer').classList.remove('io-mode');
+  stopIo(); state.drawerMode = 'detail'; state.chargeControl = false; $('detail-drawer').classList.remove('io-mode');
   state.selected = null; $('drawer-backdrop').hidden = true; $('detail-drawer').hidden = true;
   renderFleet();
-  const id = lastFocused?.dataset?.robot || lastFocused?.dataset?.io;
-  const attribute = lastFocused?.dataset?.io ? 'data-io' : 'data-robot';
+  const id = lastFocused?.dataset?.charge || lastFocused?.dataset?.robot || lastFocused?.dataset?.io;
+  const attribute = lastFocused?.dataset?.charge ? 'data-charge' : lastFocused?.dataset?.io ? 'data-io' : 'data-robot';
   const card = id ? [...document.querySelectorAll(`[${attribute}="${id}"]`)].find(el => el.getClientRects().length) : lastFocused;
   card?.focus();
 }
@@ -312,6 +329,7 @@ function exportCSV() {
 }
 async function init() {
   document.addEventListener('click', event => {
+    const charge = event.target.closest('[data-charge]'); if (charge && state.snapshot) { openDetail(charge.dataset.charge, 'charge'); return; }
     const io = event.target.closest('[data-io]'); if (io && state.snapshot) { openDetail(io.dataset.io, 'io'); return; }
     const card = event.target.closest('[data-robot]'); if (card && state.snapshot) openDetail(card.dataset.robot);
     const page = event.target.closest('[data-page]'); if (page) setPage(page.dataset.page);

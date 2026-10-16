@@ -72,6 +72,32 @@ test('DO HTTP endpoint requires same origin and a token belonging to an open IO 
   assert.equal((await post({ Origin: url, 'X-IO-Control-Token': token })).status, 403); assert.equal(calls, 1);
 });
 
+test('charging requires a fresh unique valid relay and preserves driver rejection without fallback', async () => {
+  let packet, sent = [];
+  const service = new IoService({ openStream: (_robot, onPacket) => {
+    packet = onPacket; return { close() {}, setOutput: async command => {
+      sent.push(command); return { request_id: command.requestId, status: 'rejected', may_have_applied: false, message: 'Charging owner rejected' };
+    } };
+  } });
+  const cmd = { requestId: 'f'.repeat(32), value: 1, expectedValue: 0 };
+  await assert.rejects(service.setCharging(robot, cmd), { status: 409 });
+  const stop = service.subscribe(robot, () => {}); packet(sample());
+  const result = await service.setCharging(robot, cmd);
+  assert.equal(result.status, 'rejected'); assert.equal(sent.length, 1); assert.equal(sent[0].logicalName, 'charge_relay');
+  for (const change of [
+    raw => { raw.do_channels = raw.do_channels.filter(ch => ch.logical_name !== 'charge_relay'); },
+    raw => { raw.do_channels[1].is_valid = false; },
+    raw => { raw.di_channels[0].logical_name = 'charge_relay'; },
+    raw => { raw.do_channels[1].value = 1; }
+  ]) {
+    const next = sample(); change(next.payload.io); packet(next);
+    await assert.rejects(service.setCharging(robot, { ...cmd, requestId: 'b'.repeat(32) }), { status: 409 });
+  }
+  packet(sample()); service.streams.get(service.key(robot)).last.checkedAt = new Date(Date.now() - 3000).toISOString();
+  await assert.rejects(service.setCharging(robot, { ...cmd, requestId: 'b'.repeat(32) }), { status: 409 });
+  assert.equal(sent.length, 1); stop();
+});
+
 test('SSH DO transport sends one fixed command and correlates responses without replay', async t => {
   let stream;
   class Channel extends Duplex {

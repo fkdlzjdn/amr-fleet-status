@@ -81,7 +81,7 @@ function createApplication(collector, options = {}) {
       if (closed) unsubscribe();
       return;
     }
-    if (request.method === 'POST' && /^\/api\/robots\/(?:R_\d{3}|IP_[0-9_]+)\/io\/(?:unlock|lock|output)$/.test(url.pathname)) {
+    if (request.method === 'POST' && /^\/api\/robots\/(?:R_\d{3}|IP_[0-9_]+)\/io\/(?:unlock|lock|output|charge)$/.test(url.pathname)) {
       const action = url.pathname.split('/').at(-1);
       const id = url.pathname.split('/')[3], robot = collector.inventory.find(item => item.expected_rid === id);
       if (!robot) return json(response, 404, { error: '등록된 로봇이 아닙니다.' });
@@ -90,7 +90,7 @@ function createApplication(collector, options = {}) {
       if (!token || token.id !== id || token.ip !== robot.ip) return json(response, 403, { error: '열려 있는 실시간 IO 화면이 필요합니다.' });
       if (action === 'lock') { doControl.lock(token); return json(response, 200, { authorized: false }); }
       if (!doControl.enabled) return json(response, 403, { error: 'DO 제어가 비활성화되어 있습니다. 서버 관리자에게 PIN 설정을 요청하세요.' });
-      if (action === 'output' && !doControl.authorized(token)) return json(response, 403, { error: 'DO 제어 PIN 인증이 필요합니다.', pinRequired: true });
+      if (['output', 'charge'].includes(action) && !doControl.authorized(token)) return json(response, 403, { error: 'DO 제어 PIN 인증이 필요합니다.', pinRequired: true });
       if (!request.headers['content-type']?.startsWith('application/json')) return json(response, 415, { error: 'JSON 형식으로 입력하세요.' });
       let body = '';
       try {
@@ -104,7 +104,7 @@ function createApplication(collector, options = {}) {
           return json(response, result.status, result);
         }
         if (!doControl.authorized(token)) return json(response, 403, { error: 'DO 제어 PIN 인증이 만료되었습니다.', pinRequired: true });
-        const result = await ioService.setOutput(robot, command);
+        const result = await (action === 'charge' ? ioService.setCharging(robot, command) : ioService.setOutput(robot, command));
         return json(response, result.status === 'rejected' ? 409 : result.status === 'unconfirmed' ? 202 : 200, result);
       } catch (error) {
         return json(response, error instanceof SyntaxError ? 400 : error.status || 500,
