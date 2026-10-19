@@ -1,5 +1,7 @@
 'use strict';
 const state = { snapshot: null, ros: 'all', model: 'all', search: '', page: 'overview', selected: null, refreshing: false, lastObserved: new Map(), initialized: false };
+const rowRefresh = { until: new Map(), timer: null };
+const ROW_REFRESH_MS = 1800;
 const $ = id => document.getElementById(id);
 const svg = name => `<svg aria-hidden="true"><use href="#i-${name}"/></svg>`;
 const escapeHTML = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
@@ -169,6 +171,9 @@ function renderModels() {
 function renderFleet() {
   if (!state.snapshot) return;
   if (state.fleetInteraction) { state.fleetRenderPending = true; return; }
+  const now = Date.now(), registered = new Set(state.snapshot.robots.map(robot => `${robot.id}:${robot.ip}`));
+  clearTimeout(rowRefresh.timer); rowRefresh.timer = null;
+  for (const [key, until] of rowRefresh.until) if (until <= now || !registered.has(key)) rowRefresh.until.delete(key);
   const focused = document.activeElement;
   const focusedSelector = focused?.dataset?.charge ? `[data-charge="${focused.dataset.charge}"]` : focused?.dataset?.io ? `[data-io="${focused.dataset.io}"]`
     : focused?.dataset?.robot ? `[data-robot="${focused.dataset.robot}"].${focused.classList.contains('robot-identity') ? 'robot-identity' : 'table-detail'}` : null;
@@ -179,8 +184,11 @@ function renderFleet() {
   $('empty-state').hidden = robots.length !== 0;
   const rows = robots.map(robot => {
     const arrived = state.initialized && state.lastObserved.get(robot.id) !== robot.observedAt;
+    const refreshKey = `${robot.id}:${robot.ip}`;
+    if (arrived) rowRefresh.until.set(refreshKey, now + ROW_REFRESH_MS);
+    const highlighted = (rowRefresh.until.get(refreshKey) || 0) > now;
     const bringup = robot.bringup === 'running' ? `<span class="pill good">${svg('check')}실행 중</span>` : `<span class="pill neutral">${robot.bringup === 'not_applicable' ? '해당 없음' : '실행 확인 안 됨'}</span>`;
-    return `<tr class="robot-row${arrived ? ' just-updated' : ''}" data-row="${robot.id}"><td><button class="robot-identity" data-robot="${robot.id}" aria-label="${escapeHTML(displayRid(robot))} 상세 보기">${robotPicture(robot)}<span><strong>${escapeHTML(displayRid(robot))}</strong><code>${robot.ip}:${robot.port}</code><span class="row-update-label" aria-hidden="true">${svg('refresh')}방금 갱신됨</span></span></button></td><td><span class="pill ${robot.needsAttention ? 'warning' : 'good'}"><i class="dot ${dotClass(robot)}"></i>${statusLabel(robot)}</span></td><td><span class="model-name">${escapeHTML(robot.modelLabel)}</span></td><td>${rosBadge(robot)}<span class="distro-name">${escapeHTML(robot.distro || '배포판 미확인')}</span></td><td><span class="runtime-label ${robot.activeRos === 'ros1' || robot.activeRos === 'ros2' ? 'running' : ''}">${svg(robot.activeRos === 'ros1' || robot.activeRos === 'ros2' ? 'check' : 'info')}${robot.activeRos === 'stopped' ? '실행 안 됨' : robot.activeRos === 'unknown' ? '확인 안 됨' : `${rosLabels[robot.activeRos]} 실행`}</span></td><td>${servicePill(robot.service)}</td><td>${bringup}</td><td>${batteryBadge(robot.battery, robot.id)}</td><td><div class="row-actions">${ioButton(robot)}<button class="table-detail" data-robot="${robot.id}" aria-label="${escapeHTML(displayRid(robot))} 자세히 보기">자세히 ${svg('arrow')}</button></div></td></tr>`;
+    return `<tr class="robot-row${highlighted ? ' just-updated' : ''}" data-row="${robot.id}"><td><button class="robot-identity" data-robot="${robot.id}" aria-label="${escapeHTML(displayRid(robot))} 상세 보기">${robotPicture(robot)}<span><strong>${escapeHTML(displayRid(robot))}</strong><code>${robot.ip}:${robot.port}</code><span class="row-update-label" aria-hidden="true">${svg('refresh')}조회 갱신 완료</span></span></button></td><td><span class="pill ${robot.needsAttention ? 'warning' : 'good'}"><i class="dot ${dotClass(robot)}"></i>${statusLabel(robot)}</span></td><td><span class="model-name">${escapeHTML(robot.modelLabel)}</span></td><td>${rosBadge(robot)}<span class="distro-name">${escapeHTML(robot.distro || '배포판 미확인')}</span></td><td><span class="runtime-label ${robot.activeRos === 'ros1' || robot.activeRos === 'ros2' ? 'running' : ''}">${svg(robot.activeRos === 'ros1' || robot.activeRos === 'ros2' ? 'check' : 'info')}${robot.activeRos === 'stopped' ? '실행 안 됨' : robot.activeRos === 'unknown' ? '확인 안 됨' : `${rosLabels[robot.activeRos]} 실행`}</span></td><td>${servicePill(robot.service)}</td><td>${bringup}</td><td>${batteryBadge(robot.battery, robot.id)}</td><td><div class="row-actions">${ioButton(robot)}<button class="table-detail" data-robot="${robot.id}" aria-label="${escapeHTML(displayRid(robot))} 자세히 보기">자세히 ${svg('arrow')}</button></div></td></tr>`;
   }).join('');
   const table = $('robot-table');
   if (!table.rows) table.innerHTML = rows;
@@ -207,6 +215,7 @@ function renderFleet() {
   if (focusedSelector && !focused.isConnected) $('robot-table').querySelector(focusedSelector)?.focus({ preventScroll: true });
   for (const robot of state.snapshot.robots) state.lastObserved.set(robot.id, robot.observedAt);
   state.initialized = true;
+  if (rowRefresh.until.size) rowRefresh.timer = setTimeout(renderFleet, Math.max(1, Math.min(...rowRefresh.until.values()) - Date.now()) + 16);
   $('updated-at').textContent = `최근 수집 ${timeLabel(state.snapshot.generatedAt)}`;
 }
 function renderHistory() {
