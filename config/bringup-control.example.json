@@ -1,0 +1,4 @@
+{
+  "robots": [],
+  "description": "검증한 로봇만 bringup-control.json에 등록합니다. rid, ip, domain, files[{path, sha256}]를 지정하며 첫 파일은 .bash_aliases입니다."
+}

@@ -106,7 +106,7 @@ test('old successful values are marked stale rather than displayed as current he
 test('live API exposes no password/private key and refresh only queues registered reads', async t => {
   const c = new Collector(inventory, { statePath: '/nonexistent/fleet-test.json' }); const calls = [];
   c.refresh = id => { calls.push(id || 'all'); return true; };
-  const server = createApplication(c, { doControl: new DoControl({}) }); await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const server = createApplication(c, { doControl: new DoControl({}), bringupControl: new DoControl({}) }); await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   t.after(() => { server.closeClients(); server.close(); });
   const url = `http://127.0.0.1:${server.address().port}`;
   const health = await (await fetch(url + '/api/health')).json(); assert.equal(health.mode, 'live'); assert.equal(health.readOnly, true); assert.equal(health.ioOutputControl, false);

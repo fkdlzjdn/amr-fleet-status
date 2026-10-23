@@ -10,6 +10,7 @@ __pycache__/
 .env.*
 !.env.example
 config/fleet.json
+config/bringup-control.json
 *.pem
 *.key
 id_rsa*

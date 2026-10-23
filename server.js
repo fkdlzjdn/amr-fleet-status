@@ -9,11 +9,12 @@ const { listenServer, printAddresses } = require('./lib/server-listen');
 const { IoService } = require('./lib/io-service');
 const { BatteryLive } = require('./lib/battery-live');
 const { DoControl } = require('./lib/do-control');
+const { BringupService, loadProfiles } = require('./lib/bringup-service');
 const { loadEnv, inventoryFile, DEFAULT_RANGE, validateRange, loadRange, saveRange, inventoryForRange } = require('./lib/config');
 const root = __dirname;
 loadEnv(path.join(root, '.env'));
 const assets = { '/': ['index.html', 'text/html; charset=utf-8'], '/index.html': ['index.html', 'text/html; charset=utf-8'],
-  '/style.css': ['style.css', 'text/css; charset=utf-8'], '/app.js': ['app.js', 'text/javascript; charset=utf-8'], '/io.js': ['io.js', 'text/javascript; charset=utf-8'], '/favicon.svg': ['favicon.svg', 'image/svg+xml'] };
+  '/style.css': ['style.css', 'text/css; charset=utf-8'], '/app.js': ['app.js', 'text/javascript; charset=utf-8'], '/io.js': ['io.js', 'text/javascript; charset=utf-8'], '/bringup.js': ['bringup.js', 'text/javascript; charset=utf-8'], '/favicon.svg': ['favicon.svg', 'image/svg+xml'] };
 function json(response, status, data) {
   if (response.destroyed || response.writableEnded) return;
   response.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }); response.end(JSON.stringify(data));
@@ -22,6 +23,9 @@ function createApplication(collector, options = {}) {
   const ioService = options.ioService || new IoService();
   const batteryLive = options.batteryLive || new BatteryLive(collector);
   const doControl = options.doControl || new DoControl();
+  const bringupService = options.bringupService || new BringupService(options.bringupProfiles || loadProfiles(root));
+  const bringupControl = options.bringupControl || new DoControl({ ...process.env, DO_CONTROL_ENABLED: process.env.BRINGUP_CONTROL_ENABLED === 'true' ? 'true' : 'false' });
+  const bringupSessions = new Map();
   const snapshot = () => batteryLive.snapshot(collector.snapshot());
   const rangePath = options.rangePath || path.join(root, 'runtime/scan-range.json');
   const defaults = options.inventory || inventoryFile(root);
@@ -53,9 +57,51 @@ function createApplication(collector, options = {}) {
       url = new URL(request.url, 'http://localhost');
     } catch { return json(response, 400, { error: '올바른 요청 경로가 아닙니다.' }); }
     if (request.method === 'POST' && request.headers.origin && request.headers.origin !== `http://${request.headers.host}`) return json(response, 403, { error: 'Origin not allowed' });
-    if (request.method === 'GET' && url.pathname === '/api/health') return json(response, 200, { status: 'ok', mode: 'live', version: '0.3.0', readOnly: !doControl.enabled, ioOutputControl: doControl.enabled, collector: collector.snapshot().collector });
+    if (request.method === 'GET' && url.pathname === '/api/health') return json(response, 200, { status: 'ok', mode: 'live', version: '0.3.0', readOnly: !doControl.enabled && !bringupControl.enabled, ioOutputControl: doControl.enabled, bringupControl: bringupControl.enabled, collector: collector.snapshot().collector });
     if (request.method === 'GET' && url.pathname === '/api/fleet') return json(response, 200, snapshot());
     if (request.method === 'GET' && url.pathname === '/api/collector/status') return json(response, 200, collector.snapshot().collector);
+    if (/^\/api\/robots\/(?:R_\d{3}|IP_[0-9_]+)\/bringup\/(?:session|status|unlock|lock|start|stop)$/.test(url.pathname)) {
+      const id = url.pathname.split('/')[3], action = url.pathname.split('/').at(-1);
+      const robot = collector.inventory.find(item => item.expected_rid === id);
+      if (!robot) return json(response, 404, { error: '등록된 로봇이 아닙니다.' });
+      if (!bringupService.profile(robot)) return json(response, 409, { error: '이 로봇의 기동 방식이 등록되지 않았습니다.' });
+      if (action === 'status' ? request.method !== 'GET' : request.method !== 'POST') return json(response, 405, { error: '지원하지 않는 요청 방식입니다.' });
+      if (request.method === 'POST' && request.headers.origin !== `http://${request.headers.host}`) return json(response, 403, { error: '같은 화면에서 bringup을 제어하세요.' });
+      for (const [key, value] of bringupSessions) if (value.expiresAt <= Date.now()) bringupSessions.delete(key);
+      if (action === 'session') {
+        if (bringupSessions.size >= 512) return json(response, 429, { error: '열린 제어 화면이 많습니다. 잠시 후 다시 시도하세요.' });
+        const token = crypto.randomBytes(24).toString('hex');
+        const session = { id, ip: robot.ip, authorizedUntil: 0, expiresAt: Date.now() + 1800000 };
+        bringupSessions.set(token, session);
+        return json(response, 200, { token, ...bringupControl.status(), authorized: bringupControl.authorized(session) });
+      }
+      const session = bringupSessions.get(request.headers['x-bringup-control-token']);
+      if (!session || session.id !== id || session.ip !== robot.ip) return json(response, 403, { error: '제어 연결이 만료되었습니다. 화면을 다시 여세요.' });
+      if (action === 'status') return json(response, 200, await bringupService.read(robot));
+      if (action === 'lock') { bringupSessions.delete(request.headers['x-bringup-control-token']); return json(response, 200, { authorized: false }); }
+      if (!bringupControl.enabled) return json(response, 403, { error: '서버에서 bringup 제어가 비활성화되어 있습니다.' });
+      if (action !== 'unlock' && !bringupControl.authorized(session)) return json(response, 403, { error: 'PIN 인증이 필요합니다.', pinRequired: true });
+      if (!request.headers['content-type']?.startsWith('application/json')) return json(response, 415, { error: 'JSON 형식으로 입력하세요.' });
+      try {
+        let body = '';
+        for await (const chunk of request) { body += chunk; if (Buffer.byteLength(body) > 2048) return json(response, 413, { error: '요청이 너무 큽니다.' }); }
+        const command = JSON.parse(body);
+        if (bringupSessions.get(request.headers['x-bringup-control-token']) !== session || session.expiresAt <= Date.now()
+          || !collector.inventory.some(item => item.expected_rid === id && item.ip === robot.ip)) return json(response, 403, { error: '제어 연결 또는 대상이 변경되었습니다.' });
+        if (action === 'unlock') {
+          const result = bringupControl.unlock(session, command?.pin, request.socket.remoteAddress || 'unknown');
+          if (result.retryAfter) response.setHeader('Retry-After', result.retryAfter);
+          return json(response, result.status, result);
+        }
+        if (!bringupControl.authorized(session)) return json(response, 403, { error: 'PIN 인증이 만료되었습니다.', pinRequired: true });
+        const result = await bringupService.run(robot, action, command);
+        collector.refresh(id);
+        return json(response, result.status === 'rejected' ? 409 : result.status === 'unconfirmed' ? 202 : 200, result);
+      } catch (error) {
+        return json(response, error instanceof SyntaxError ? 400 : error.status || 500,
+          { error: error instanceof SyntaxError ? '올바른 JSON을 입력하세요.' : error.status ? error.message : 'bringup 결과를 확인하지 못했습니다.' });
+      }
+    }
     if (request.method === 'GET' && /^\/api\/robots\/(?:R_\d{3}|IP_[0-9_]+)\/io\/events$/.test(url.pathname)) {
       const id = url.pathname.split('/')[3];
       const robot = collector.inventory.find(item => item.expected_rid === id);
@@ -122,7 +168,8 @@ function createApplication(collector, options = {}) {
     }
     if (request.method === 'GET' && url.pathname === '/api/settings') {
       const auth = credentials();
-      return json(response, 200, { mode: 'live', readOnly: !doControl.enabled, ioOutputControl: doControl.enabled, doControl: doControl.status(), range: collector.range || validateRange(DEFAULT_RANGE), defaultRange: DEFAULT_RANGE, maxTargets: 256, username: auth.username,
+      return json(response, 200, { mode: 'live', readOnly: !doControl.enabled && !bringupControl.enabled, ioOutputControl: doControl.enabled, doControl: doControl.status(),
+        bringupControl: { ...bringupControl.status(), robots: bringupService.publicProfiles() }, range: collector.range || validateRange(DEFAULT_RANGE), defaultRange: DEFAULT_RANGE, maxTargets: 256, username: auth.username,
         keyConfigured: Boolean(auth.privateKey), passwordConfigured: Boolean(auth.password), knownHostsConfigured: Boolean(auth.knownHosts),
         intervalMs: collector.interval, concurrency: collector.concurrency, total: collector.inventory.length });
     }
@@ -170,6 +217,7 @@ function createApplication(collector, options = {}) {
   });
   server.on('close', () => { clearInterval(heartbeat); clearTimeout(scheduled); ioService.close?.(); batteryLive.close(); });
   server.closeClients = () => {
+    bringupSessions.clear();
     for (const response of clients) response.end(); clients.clear();
     for (const response of ioClients) response.end(); ioClients.clear(); ioService.close?.(); batteryLive.close();
   };
