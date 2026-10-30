@@ -12,7 +12,8 @@ import xmlrpc.client
 
 BATTERY_ENV_KEYS = {
     'PATH', 'PYTHONPATH', 'LD_LIBRARY_PATH', 'AMENT_PREFIX_PATH', 'CMAKE_PREFIX_PATH',
-    'ROS_MASTER_URI', 'ROS_DOMAIN_ID', 'ROS_LOCALHOST_ONLY', 'ROS_DISTRO', 'ROS_VERSION',
+    'ROS_MASTER_URI', 'ROS_HOSTNAME', 'ROS_IP', 'ROS_NAMESPACE', 'ROS_PACKAGE_PATH',
+    'ROS_DOMAIN_ID', 'ROS_LOCALHOST_ONLY', 'ROS_DISTRO', 'ROS_VERSION',
     'RMW_IMPLEMENTATION', 'CYCLONEDDS_URI', 'FASTRTPS_DEFAULT_PROFILES_FILE',
     'FASTDDS_DEFAULT_PROFILES_FILE', 'ROS_DISCOVERY_SERVER', 'ROS_AUTOMATIC_DISCOVERY_RANGE',
     'ROS_STATIC_PEERS', 'RMW_FASTRTPS_USE_QOS_FROM_XML', 'RMW_IMPLEMENTATION',
@@ -128,7 +129,9 @@ def ros1_battery(rid):
                 break
             if name == 'present':
                 break
-        return battery_sample(values, topic, 'ros1', stamp, header.get('latching') == '1')
+        result = battery_sample(values, topic, 'ros1', stamp, header.get('latching') == '1')
+        result['publisher'] = publishers[0]
+        return result
 
 
 def charging_topic(topics, rid):

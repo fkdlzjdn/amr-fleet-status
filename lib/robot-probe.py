@@ -56,6 +56,7 @@ def probe():
         argv = [item.decode('utf-8', errors='replace') for item in raw.split(b'\0') if item]
         names = [os.path.basename(item) for item in argv]
         launch = any(name == 'ros2' and argv[i + 1:i + 3] == ['launch', 'spx_bringup'] for i, name in enumerate(names))
+        ros1_launch = any(name == 'roslaunch' and argv[i + 1:i + 3] == ['spx_bringup', 'bringup.launch'] for i, name in enumerate(names))
         # A ROS CLI inspection process is not evidence that the robot runtime is running.
         inspection = any(name in ['rostopic', 'rosparam', 'rosnode', 'rosservice', 'rosmsg', 'rossrv'] for name in names)
         inspection = inspection or any(name == 'ros2' and argv[i + 1:i + 2] not in [['launch'], ['run']] for i, name in enumerate(names))
@@ -90,9 +91,11 @@ def probe():
             plugins = set(re.findall(r'/lib(spx_bms_[A-Za-z0-9_]+_plugin)\.so', maps))
             if plugins == {'spx_bms_slec_plugin'}:
                 bms_namespace = next((a.split(':=', 1)[1] for a in argv if a.startswith('__ns:=')), env.get('ROS_NAMESPACE') or '/')
-                bms_name = next((a.split(':=', 1)[1] for a in argv if a.startswith('__node:=')), 'bms_driver_node')
+                bms_name = next((a.split(':=', 1)[1] for a in argv if a.startswith(('__node:=', '__name:='))), 'bms_driver_node')
+                start = (read(folder / 'stat') or '').rsplit(')', 1)[-1].split()
                 bms_profiles.append({'publisher': bms_namespace.rstrip('/') + '/' + bms_name,
-                                     'pid': int(folder.name), 'plugin': 'spx_bms_slec_plugin', 'current_sign': 'positive_charging'})
+                                     'pid': int(folder.name), 'start': start[19] if len(start) > 19 else None,
+                                     'plugin': 'spx_bms_slec_plugin', 'current_sign': 'positive_charging'})
         model = next((a.split(':=', 1)[1] for a in argv if re.fullmatch(r'robot_model:=[A-Za-z0-9_.-]+', a)), env.get('ROBOT_MODEL'))
         namespace = next((a.split(':=', 1)[1] for a in argv if a.startswith('ns:=')), None)
         rid = valid_rid(namespace)
@@ -100,7 +103,8 @@ def probe():
             rid = next((valid_rid(env.get(key)) for key in ['RID', 'ROBOT_ID', 'ROS_NAMESPACE', 'ROS_HOSTNAME', 'ROS_MASTER_URI'] if valid_rid(env.get(key))), None)
         result['process_evidence'].append({'pid': int(folder.name), 'generation': generation, 'distro': distro,
             'model': model if model and re.fullmatch(r'[A-Za-z0-9_.-]{1,100}', model) else None,
-            'rid': rid, 'bringup': launch, 'namespace': namespace, 'source': 'ros2_launch' if launch else 'process_environment'})
+            'rid': rid, 'bringup': launch or ros1_launch, 'namespace': namespace,
+            'source': 'ros2_launch' if launch else 'ros1_launch' if ros1_launch else 'process_environment'})
         if len(result['process_evidence']) >= 256: break
     # Read configuration text only. Never source or execute startup scripts.
     home = Path.home()

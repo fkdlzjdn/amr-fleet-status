@@ -1,4 +1,4 @@
 {
   "robots": [],
-  "description": "검증한 로봇만 bringup-control.json에 등록합니다. rid, ip, domain, files[{path, sha256}]를 지정하며 첫 파일은 .bash_aliases입니다."
+  "description": "검증한 로봇만 bringup-control.json에 등록합니다. ROS2: rid, ip, domain, files[{path, sha256}], 첫 파일 .bash_aliases. ROS1: backend=ros1_systemd, rid, ip, files(첫 파일 scorpion.sh), unitSha256, environmentSha256. README의 ROS1 기동 제어를 참고하세요."
 }

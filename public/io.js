@@ -12,7 +12,7 @@ function ioButton(robot, detail = false) {
   return `<button class="${detail ? 'button secondary' : 'table-detail'} io-check-button ${status}" data-io="${robot.id}" title="${title}" aria-label="${escapeHTML(displayRid(robot))} IO 체크 · ${title}"${stopped ? ' disabled' : ''}><span class="io-button-dot" aria-hidden="true"></span>${stopped ? 'IO 미실행' : status === 'running' ? 'IO 체크' : 'IO 확인'}</button>`;
 }
 const ioReasons = { paused: '탭이 숨겨져 IO 연결을 일시 정지했습니다.', removed: '조회 범위에서 제외된 로봇입니다.', unsupported_browser: '브라우저에서 실시간 연결을 지원하지 않습니다.', loading: 'IO 상태를 읽고 있습니다…', node_not_found: 'io_driver_node 실행을 확인하지 못했습니다.',
-  no_topic: 'io_driver_node의 io/status 토픽이 없습니다.', unsupported: '이 IO 체크는 ROS2 io_driver_node를 지원합니다.',
+  no_topic: 'io_driver_node의 io/status 토픽이 없습니다.', unsupported: '지원되는 ROS1/ROS2 io_driver_node 인터페이스가 필요합니다.',
   identity_unknown: 'IO 토픽의 로봇 namespace를 확인할 수 없습니다.', ambiguous: 'IO 노드 또는 발행자가 여러 개입니다.',
   runtime_unavailable: '로봇의 ROS IO 메시지 읽기 환경을 확인할 수 없습니다.', timeout: 'IO 수신 시간이 초과되었습니다.',
   stale: 'IO 정보가 오래되어 현재 ON/OFF를 표시하지 않습니다.', invalid: 'IO 메시지 형식을 확인할 수 없습니다.',

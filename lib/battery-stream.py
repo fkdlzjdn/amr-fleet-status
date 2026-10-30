@@ -15,8 +15,12 @@ def live_current_profile(profiles, publisher):
     try:
         folder = Path('/proc') / str(profile['pid'])
         args = [a.decode(errors='replace') for a in (folder / 'cmdline').read_bytes().split(b'\0') if a]
-        namespace = next((a.split(':=', 1)[1] for a in args if a.startswith('__ns:=')), '/')
-        name = next((a.split(':=', 1)[1] for a in args if a.startswith('__node:=')), 'bms_driver_node')
+        environment = dict(item.split(b'=', 1) for item in (folder / 'environ').read_bytes().split(b'\0') if b'=' in item)
+        namespace = next((a.split(':=', 1)[1] for a in args if a.startswith('__ns:=')), environment.get(b'ROS_NAMESPACE', b'/').decode())
+        name = next((a.split(':=', 1)[1] for a in args if a.startswith(('__node:=', '__name:='))), 'bms_driver_node')
+        start = (folder / 'stat').read_text().rsplit(')', 1)[1].split()[19]
+        if profile.get('start') and start != profile['start']:
+            return None
         with (folder / 'maps').open() as stream:
             plugins = set(re.findall(r'/lib(spx_bms_[A-Za-z0-9_]+_plugin)\.so', stream.read(1048576)))
         if plugins == {'spx_bms_slec_plugin'} and namespace.rstrip('/') + '/' + name == publisher:
@@ -26,13 +30,21 @@ def live_current_profile(profiles, publisher):
     return None
 
 
-def ros2_battery_stream(rid, profiles, emit, alive):
-    import rclpy
-    from rclpy.qos import qos_profile_sensor_data
+def ros2_battery_stream(rid, profiles, emit, alive, generation='ros2'):
     from sensor_msgs.msg import BatteryState
     from std_msgs.msg import Bool
-    rclpy.init(args=['--ros-args', '--disable-external-lib-logs'])
-    node = rclpy.create_node('amr_fleet_battery_live_' + str(os.getpid()), enable_rosout=False, start_parameter_services=False)
+    if generation == 'ros1':
+        node = Ros1Node('amr_fleet_battery_live')
+        qos_profile_sensor_data = None
+        spin = lambda: time.sleep(0.02)
+        shutdown = lambda: None
+    else:
+        import rclpy
+        from rclpy.qos import qos_profile_sensor_data
+        rclpy.init(args=['--ros-args', '--disable-external-lib-logs'])
+        node = rclpy.create_node('amr_fleet_battery_live_' + str(os.getpid()), enable_rosout=False, start_parameter_services=False)
+        spin = lambda: rclpy.spin_once(node, timeout_sec=0.02)
+        shutdown = rclpy.shutdown
     latest, io_latest = [], []
     subscription, io_subscription, topic, io_topic = None, None, None, None
     revision, last_revision, last_emit, last_discovery, last_status = 0, 0, 0, 0, None
@@ -48,7 +60,7 @@ def ros2_battery_stream(rid, profiles, emit, alive):
 
     try:
         while alive():
-            rclpy.spin_once(node, timeout_sec=0.02)
+            spin()
             now = time.monotonic()
             if now - last_discovery >= 0.5:
                 last_discovery = now
@@ -70,6 +82,8 @@ def ros2_battery_stream(rid, profiles, emit, alive):
                     else:
                         publisher = publishers[0].node_namespace.rstrip('/') + '/' + publishers[0].node_name
                         profile = live_current_profile(profiles, publisher)
+                        if generation == 'ros1' and profile and node.publisher_pid(publisher) != profile['pid']:
+                            profile = None
                         if any(p.get('publisher') == publisher for p in profiles) and profile is None:
                             emit({'status': 'context_changed'}); return
             status = topic_error
@@ -82,7 +96,9 @@ def ros2_battery_stream(rid, profiles, emit, alive):
                     if current_publisher != publisher:
                         emit({'status': 'context_changed'}); return
                     values = {key: getattr(message, key) for key in ('percentage', 'voltage', 'current', 'present', 'power_supply_status')}
-                    result = battery_sample(values, topic, 'ros2', message.header.stamp.sec + message.header.stamp.nanosec / 1e9)
+                    stamp = message.header.stamp
+                    stamp = stamp.secs + stamp.nsecs / 1e9 if hasattr(stamp, 'secs') else stamp.sec + stamp.nanosec / 1e9
+                    result = battery_sample(values, topic, generation, stamp)
                     if result['message_age_seconds'] is not None and result['message_age_seconds'] > 2:
                         result['status'] = 'stale'
                     result['publisher'] = publisher
@@ -108,10 +124,10 @@ def ros2_battery_stream(rid, profiles, emit, alive):
                 result = result or {'status': status, 'topic': topic}
                 emit(result); last_emit = now; last_status = result['status']
     finally:
-        node.destroy_node(); rclpy.shutdown()
+        node.destroy_node(); shutdown()
 
 
-def battery_stream_worker(rid, profiles):
+def battery_stream_worker(rid, profiles, generation='ros2'):
     lease = [time.monotonic()]
 
     def alive():
@@ -122,7 +138,10 @@ def battery_stream_worker(rid, profiles):
         return time.monotonic() - lease[0] < 8
 
     try:
-        ros2_battery_stream(rid, profiles, battery_stream_emit, alive)
+        if generation == 'ros1':
+            ros2_battery_stream(rid, profiles, battery_stream_emit, alive, generation='ros1')
+        else:
+            ros2_battery_stream(rid, profiles, battery_stream_emit, alive)
     except (BrokenPipeError, KeyboardInterrupt):
         pass
     except ImportError:
@@ -134,17 +153,17 @@ def battery_stream_worker(rid, profiles):
 def stream_battery(contexts, rid, profiles, source):
     groups = {}
     for context in contexts:
-        env = context['env']; key = (context['generation'], env.get('ROS_DOMAIN_ID', '0'))
+        env = context['env']; key = (context['generation'], env.get('ROS_MASTER_URI', 'http://localhost:11311') if context['generation'] == 'ros1' else env.get('ROS_DOMAIN_ID', '0'))
         if key not in groups or len(env.get('PYTHONPATH', '')) > len(groups[key]['env'].get('PYTHONPATH', '')):
             groups[key] = context
     if len(groups) != 1:
         battery_stream_emit({'status': 'ambiguous' if groups else 'not_running'}); return
     context = next(iter(groups.values()))
-    if context['generation'] != 'ros2':
+    if context['generation'] not in ('ros1', 'ros2'):
         battery_stream_emit({'status': 'unsupported'}); return
     env = dict(os.environ); env.update(context['env']); env['PYTHONDONTWRITEBYTECODE'] = '1'
     python = context.get('python') or '/usr/bin/python3'
-    code = source + '\nbattery_stream_worker(' + repr(rid) + ',' + repr(profiles) + ')'
+    code = source + '\nbattery_stream_worker(' + repr(rid) + ',' + repr(profiles) + ',' + repr(context['generation']) + ')'
     try:
         os.execve(python, [python, '-u', '-B', '-c', code], env)
     except OSError:

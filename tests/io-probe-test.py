@@ -69,7 +69,7 @@ class IoProbeTests(unittest.TestCase):
     def test_no_runtime_wrong_identity_and_unsupported_ros_never_launch(self):
         with patch.object(io.subprocess, 'Popen') as spawn:
             self.assertEqual(io.collect_io([], 'R_006', '')['status'], 'node_not_found')
-            self.assertEqual(io.collect_io([{'generation': 'ros1'}], 'R_006', '')['status'], 'unsupported')
+            self.assertEqual(io.collect_io([{'generation': 'other'}], 'R_006', '')['status'], 'unsupported')
             self.assertEqual(io.collect_io([{'generation': 'ros2', 'namespace': '/R_007'}], 'R_006', '')['status'], 'identity_unknown')
             self.assertEqual(io.collect_io([{}, {}], 'R_006', '')['status'], 'ambiguous')
             spawn.assert_not_called()

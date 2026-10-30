@@ -6,7 +6,7 @@ const bringupUrl = id => '/api/robots/' + encodeURIComponent(id) + '/bringup/';
 function bringupButtons(robot) {
   const live = bringupAvailability.get(robot.id);
   const value = live && live.ip === robot.ip && live.at >= Date.parse(robot.observedAt || 0) ? live.state : robot.bringup;
-  const labels = { running: '실행 중', stopped: '정지', starting: '시작 확인 중', not_applicable: '해당 없음', ambiguous: '실행 충돌' };
+  const labels = { running: '실행 중', stopped: '정지', starting: '시작 확인 중', stopping: '종료 확인 중', not_applicable: '해당 없음', ambiguous: '실행 충돌' };
   const configured = state.settings?.bringupControl?.robots?.some(item => item.id === robot.id && item.ip === robot.ip);
   const supported = configured && robot.ssh === 'connected';
   return '<div class="bringup-cell"><span class="pill ' + (value === 'running' ? 'good' : 'neutral') + '">' +
@@ -42,7 +42,7 @@ function renderBringupDetail(robot) {
     $('bringup-start').onclick = () => requestBringup('start');
     $('bringup-stop').onclick = () => requestBringup('stop');
   }
-  const labels = { running: '실행 중', stopped: '정지', starting: '시작 확인 중', ambiguous: '실행 충돌', unknown: '미확인' };
+  const labels = { running: '실행 중', stopped: '정지', starting: '시작 확인 중', stopping: '종료 확인 중', ambiguous: '실행 충돌', unknown: '미확인' };
   $('bringup-current').textContent = fresh ? labels[current.state] || '미확인' : '상태 확인 중';
   $('bringup-current').className = fresh && current.state === 'running' ? 'running' : '';
   $('bringup-pid').textContent = fresh && current.pid ? 'launch PID ' + current.pid : '';

@@ -23,6 +23,12 @@ test('bringup profiles stay private and validate identities and relative startup
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'amr-bringup-')); t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   fs.mkdirSync(path.join(root, 'config')); const file = path.join(root, 'config/bringup-control.json');
   fs.writeFileSync(file, JSON.stringify({ robots: [profile] })); assert.equal(loadProfiles(root).length, 1);
+  const ros1 = { rid: 'R_001', ip: '192.168.20.51', backend: 'ros1_systemd', unitSha256: '1'.repeat(64),
+    environmentSha256: '2'.repeat(64), files: [{ path: 'scorpion.sh', sha256: '3'.repeat(64) }] };
+  fs.writeFileSync(file, JSON.stringify({ robots: [ros1] })); assert.equal(loadProfiles(root)[0].backend, 'ros1_systemd');
+  for (const bad of [{ ...ros1, unitSha256: '' }, { ...ros1, environmentSha256: '' }, { ...ros1, backend: 'arbitrary' }]) {
+    fs.writeFileSync(file, JSON.stringify({ robots: [bad] })); assert.throws(() => loadProfiles(root));
+  }
   fs.writeFileSync(file, JSON.stringify({ robots: [{ ...profile, files: [{ path: '../wrong', sha256: '0'.repeat(64) }] }] }));
   assert.throws(() => loadProfiles(root));
   assert.deepEqual(new BringupService([profile]).publicProfiles(), [{ id: profile.rid, ip: profile.ip }]);

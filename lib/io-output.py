@@ -5,8 +5,11 @@ import time
 
 
 class IoOutputController:
-    def __init__(self, node, namespace, emit):
-        from spx_io_msgs.srv import SetOutput, GetInput
+    def __init__(self, node, namespace, emit, generation='ros2'):
+        if generation == 'ros1':
+            from spx_msgs.srv import SetOutput, GetInput
+        else:
+            from spx_io_msgs.srv import SetOutput, GetInput
         self.node, self.namespace, self.emit = node, namespace, emit
         self.SetOutput, self.GetInput = SetOutput, GetInput
         self.write_name = namespace.rstrip('/') + '/io/set_output'
@@ -31,7 +34,8 @@ class IoOutputController:
         if not latest or time.monotonic() - latest[0][1] > 1.0:
             return False
         sample = latest[0][0]
-        stamp = sample.header.stamp.sec + sample.header.stamp.nanosec / 1e9
+        stamp = sample.header.stamp
+        stamp = stamp.secs + stamp.nsecs / 1e9 if hasattr(stamp, 'secs') else stamp.sec + stamp.nanosec / 1e9
         age = time.time() - stamp
         if stamp <= 0 or age > 2 or age < -5:
             return False
@@ -75,7 +79,8 @@ class IoOutputController:
                 if not source_ready or not self.valid_target(command, latest):
                     self.finish('rejected', 'DO state changed before dispatch'); return
                 if self.writer.service_is_ready() and self.reader.service_is_ready():
-                    request = self.SetOutput.Request(); request.logical_name = command['logicalName']; request.value = float(command['value'])
+                    request = (getattr(self.SetOutput, 'Request', None) or self.SetOutput._request_class)()
+                    request.logical_name = command['logicalName']; request.value = float(command['value'])
                     pending['sent'] = True
                     pending['future'] = self.writer.call_async(request)
                     pending['phase'] = 'write'
@@ -93,7 +98,8 @@ class IoOutputController:
                 if not source_ready:
                     self.finish('unconfirmed', 'Driver accepted request; current IO source is unavailable'); return
                 if latest and latest[0][1] > pending['acknowledged'] and self.reader.service_is_ready():
-                    request = self.GetInput.Request(); request.logical_name = command['logicalName']
+                    request = (getattr(self.GetInput, 'Request', None) or self.GetInput._request_class)()
+                    request.logical_name = command['logicalName']
                     pending['future'] = self.reader.call_async(request); pending['phase'] = 'read'
             elif pending['phase'] == 'read' and pending['future'].done():
                 result = pending['future'].result()
