@@ -5,7 +5,7 @@
   <meta name="description" content="AMR Fleet Status — 로봇 현황 및 DO·bringup 제어">
   <title>로봇 현황 · AMR Fleet Status</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/style.css"><script src="/io.js" defer></script>
-  <script src="/bringup.js" defer></script><script src="/app.js" defer></script>
+  <script src="/bringup.js" defer></script><script src="/jog.js" defer></script><script src="/app.js" defer></script>
 </head>
 <body>
 <svg class="svg-library" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><defs>
@@ -66,6 +66,10 @@
       <div class="page-heading"><div><div class="eyebrow">OPERATIONS DASHBOARD</div><h1 id="page-title">로봇 현황<span class="heading-count">0</span></h1><p id="page-description">SSH 연결, ROS 런타임, 배터리 및 IO 상태를 모니터링합니다.</p></div><div class="page-actions"><button id="export-button" class="button secondary"><svg><use href="#i-download"/></svg><span>CSV 내보내기</span></button><button id="refresh-button" class="button primary"><svg><use href="#i-refresh"/></svg><span>조회 갱신</span></button></div></div>
       <div class="demo-banner live-banner"><span class="demo-label"><svg><use href="#i-shield"/></svg>현황 조회 · DO 제어</span><p>SSH 상태 수집 · ROS1/ROS2 실시간 텔레메트리</p><span id="collector-progress" class="demo-mode">연결을 확인하는 중</span></div>
       <section id="overview-page" class="page-section">
+        <section id="jog-launcher" class="jog-launcher" aria-labelledby="jog-launcher-title" hidden>
+          <div class="jog-launcher-copy"><span class="jog-launcher-icon" aria-hidden="true">↕</span><div><h2 id="jog-launcher-title">JOG 조작</h2><p>AUTO · MANUAL 공통 <span>속도 0~1.0 조절 · 가감속 적용</span></p></div></div>
+          <div class="jog-launcher-controls"><label class="sr-only" for="jog-target">JOG 대상 로봇</label><select id="jog-target"><option value="">대상 확인 중</option></select><button id="jog-launch" type="button" class="button primary" disabled>JOG 패널 열기 →</button></div>
+        </section>
         <section class="ops-panel" aria-labelledby="welcome-title">
           <div class="ops-copy">
             <span class="ops-kicker">AMR / FLEET OPERATIONS</span>

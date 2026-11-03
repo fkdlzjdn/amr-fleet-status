@@ -10,11 +10,12 @@ const { IoService } = require('./lib/io-service');
 const { BatteryLive } = require('./lib/battery-live');
 const { DoControl } = require('./lib/do-control');
 const { BringupService, loadProfiles } = require('./lib/bringup-service');
+const { JogService } = require('./lib/jog-service');
 const { loadEnv, inventoryFile, DEFAULT_RANGE, validateRange, loadRange, saveRange, inventoryForRange } = require('./lib/config');
 const root = __dirname;
 loadEnv(path.join(root, '.env'));
 const assets = { '/': ['index.html', 'text/html; charset=utf-8'], '/index.html': ['index.html', 'text/html; charset=utf-8'],
-  '/style.css': ['style.css', 'text/css; charset=utf-8'], '/app.js': ['app.js', 'text/javascript; charset=utf-8'], '/io.js': ['io.js', 'text/javascript; charset=utf-8'], '/bringup.js': ['bringup.js', 'text/javascript; charset=utf-8'], '/favicon.svg': ['favicon.svg', 'image/svg+xml'] };
+  '/style.css': ['style.css', 'text/css; charset=utf-8'], '/app.js': ['app.js', 'text/javascript; charset=utf-8'], '/io.js': ['io.js', 'text/javascript; charset=utf-8'], '/bringup.js': ['bringup.js', 'text/javascript; charset=utf-8'], '/jog.js': ['jog.js', 'text/javascript; charset=utf-8'], '/favicon.svg': ['favicon.svg', 'image/svg+xml'] };
 function json(response, status, data) {
   if (response.destroyed || response.writableEnded) return;
   response.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }); response.end(JSON.stringify(data));
@@ -25,6 +26,7 @@ function createApplication(collector, options = {}) {
   const doControl = options.doControl || new DoControl();
   const bringupService = options.bringupService || new BringupService(options.bringupProfiles || loadProfiles(root));
   const bringupControl = options.bringupControl || new DoControl({ ...process.env, DO_CONTROL_ENABLED: process.env.BRINGUP_CONTROL_ENABLED === 'true' ? 'true' : 'false' });
+  const jogService = options.jogService || new JogService(bringupService.profiles || []);
   const bringupSessions = new Map();
   const snapshot = () => batteryLive.snapshot(collector.snapshot());
   const rangePath = options.rangePath || path.join(root, 'runtime/scan-range.json');
@@ -60,6 +62,40 @@ function createApplication(collector, options = {}) {
     if (request.method === 'GET' && url.pathname === '/api/health') return json(response, 200, { status: 'ok', mode: 'live', version: '0.3.0', readOnly: !doControl.enabled && !bringupControl.enabled, ioOutputControl: doControl.enabled, bringupControl: bringupControl.enabled, collector: collector.snapshot().collector });
     if (request.method === 'GET' && url.pathname === '/api/fleet') return json(response, 200, snapshot());
     if (request.method === 'GET' && url.pathname === '/api/collector/status') return json(response, 200, collector.snapshot().collector);
+    if (/^\/api\/robots\/R_\d{3}\/jog\/(?:session|status|unlock|command|close)$/.test(url.pathname)) {
+      const id = url.pathname.split('/')[3], action = url.pathname.split('/').at(-1);
+      const robot = collector.inventory.find(item => item.expected_rid === id);
+      if (!robot) return json(response, 404, { error: '등록된 로봇이 아닙니다.' });
+      if (action === 'status' ? request.method !== 'GET' : request.method !== 'POST') return json(response, 405, { error: '지원하지 않는 요청 방식입니다.' });
+      if (request.method === 'POST' && request.headers.origin !== `http://${request.headers.host}`) return json(response, 403, { error: '같은 화면에서 수동 JOG를 요청하세요.' });
+      try {
+        if (action === 'session') {
+          if (!bringupControl.enabled) return json(response, 403, { error: '서버에서 수동 제어가 비활성화되어 있습니다.' });
+          const session = jogService.open(robot);
+          return json(response, 200, { token: session.token, ...bringupControl.status(), authorized: bringupControl.authorized(session) });
+        }
+        const session = jogService.get(robot, request.headers['x-jog-control-token']);
+        if (action === 'close') { jogService.close(session.token); return json(response, 200, { closed: true }); }
+        if (action === 'status') return json(response, 200, { ...jogService.status(session), authorized: bringupControl.authorized(session) });
+        if (!request.headers['content-type']?.startsWith('application/json')) return json(response, 415, { error: 'JSON 형식으로 입력하세요.' });
+        let raw = '';
+        for await (const chunk of request) { raw += chunk; if (Buffer.byteLength(raw) > 1024) return json(response, 413, { error: '요청이 너무 큽니다.' }); }
+        const body = JSON.parse(raw);
+        jogService.get(robot, session.token);
+        if (!collector.inventory.some(item => item.expected_rid === id && item.ip === robot.ip)) return json(response, 409, { error: '조회 대상이 변경되었습니다.' });
+        if (action === 'unlock') {
+          const result = bringupControl.unlock(session, body?.pin, request.socket.remoteAddress || 'unknown');
+          if (result.retryAfter) response.setHeader('Retry-After', result.retryAfter);
+          return json(response, result.status, result);
+        }
+        // An existing controller may always request zero, including after PIN expiry.
+        if (body?.direction !== 'stop' && !bringupControl.authorized(session)) return json(response, 403, { error: '수동 제어 PIN 인증이 필요합니다.', pinRequired: true });
+        return json(response, 200, jogService.command(session, body));
+      } catch (error) {
+        return json(response, error instanceof SyntaxError ? 400 : error.status || 500,
+          { error: error instanceof SyntaxError ? '올바른 JSON을 입력하세요.' : error.status ? error.message : 'JOG 요청을 처리하지 못했습니다.' });
+      }
+    }
     if (/^\/api\/robots\/(?:R_\d{3}|IP_[0-9_]+)\/bringup\/(?:session|status|unlock|lock|start|stop)$/.test(url.pathname)) {
       const id = url.pathname.split('/')[3], action = url.pathname.split('/').at(-1);
       const robot = collector.inventory.find(item => item.expected_rid === id);
@@ -169,7 +205,9 @@ function createApplication(collector, options = {}) {
     if (request.method === 'GET' && url.pathname === '/api/settings') {
       const auth = credentials();
       return json(response, 200, { mode: 'live', readOnly: !doControl.enabled && !bringupControl.enabled, ioOutputControl: doControl.enabled, doControl: doControl.status(),
-        bringupControl: { ...bringupControl.status(), robots: bringupService.publicProfiles() }, range: collector.range || validateRange(DEFAULT_RANGE), defaultRange: DEFAULT_RANGE, maxTargets: 256, username: auth.username,
+        bringupControl: { ...bringupControl.status(), robots: bringupService.publicProfiles() },
+        jogControl: { ...bringupControl.status(), robots: jogService.publicProfiles(), linearSpeed: 0.25, angularSpeed: 0.25, minSpeed: 0, maxSpeed: 1.0 },
+        range: collector.range || validateRange(DEFAULT_RANGE), defaultRange: DEFAULT_RANGE, maxTargets: 256, username: auth.username,
         keyConfigured: Boolean(auth.privateKey), passwordConfigured: Boolean(auth.password), knownHostsConfigured: Boolean(auth.knownHosts),
         intervalMs: collector.interval, concurrency: collector.concurrency, total: collector.inventory.length });
     }
@@ -188,6 +226,7 @@ function createApplication(collector, options = {}) {
       catch { return json(response, 500, { error: 'IP 범위를 저장하지 못했습니다. 서버 저장 경로를 확인하세요.' }); }
       collector.reconfigure(inventory, input);
       ioService.prune?.(inventory);
+      jogService.prune(inventory);
       return json(response, 200, { range: input, snapshot: snapshot() });
     }
     if (request.method === 'POST' && (url.pathname === '/api/fleet/refresh' || /^\/api\/robots\/(?:R_\d{3}|IP_[0-9_]+)\/refresh$/.test(url.pathname))) {
@@ -215,9 +254,10 @@ function createApplication(collector, options = {}) {
       json(response, 500, { error: '요청을 처리하지 못했습니다. 다시 시도하세요.' });
     });
   });
-  server.on('close', () => { clearInterval(heartbeat); clearTimeout(scheduled); ioService.close?.(); batteryLive.close(); });
+  server.on('close', () => { clearInterval(heartbeat); clearTimeout(scheduled); jogService.destroy(); ioService.close?.(); batteryLive.close(); });
   server.closeClients = () => {
     bringupSessions.clear();
+    jogService.closeAll();
     for (const response of clients) response.end(); clients.clear();
     for (const response of ioClients) response.end(); ioClients.clear(); ioService.close?.(); batteryLive.close();
   };

@@ -171,11 +171,12 @@ function renderModels() {
 function renderFleet() {
   if (!state.snapshot) return;
   if (state.fleetInteraction) { state.fleetRenderPending = true; return; }
+  if (typeof renderJogLauncher === 'function') renderJogLauncher();
   const now = Date.now(), registered = new Set(state.snapshot.robots.map(robot => `${robot.id}:${robot.ip}`));
   clearTimeout(rowRefresh.timer); rowRefresh.timer = null;
   for (const [key, until] of rowRefresh.until) if (until <= now || !registered.has(key)) rowRefresh.until.delete(key);
   const focused = document.activeElement;
-  const focusedSelector = focused?.dataset?.bringup ? `[data-bringup="${focused.dataset.bringup}"]` : focused?.dataset?.charge ? `[data-charge="${focused.dataset.charge}"]` : focused?.dataset?.io ? `[data-io="${focused.dataset.io}"]`
+  const focusedSelector = focused?.dataset?.jog ? `[data-jog="${focused.dataset.jog}"]` : focused?.dataset?.bringup ? `[data-bringup="${focused.dataset.bringup}"]` : focused?.dataset?.charge ? `[data-charge="${focused.dataset.charge}"]` : focused?.dataset?.io ? `[data-io="${focused.dataset.io}"]`
     : focused?.dataset?.robot ? `[data-robot="${focused.dataset.robot}"].${focused.classList.contains('robot-identity') ? 'robot-identity' : 'table-detail'}` : null;
   const robots = filteredRobots();
   $('visible-count').textContent = robots.length;
@@ -188,7 +189,7 @@ function renderFleet() {
     if (arrived) rowRefresh.until.set(refreshKey, now + ROW_REFRESH_MS);
     const highlighted = (rowRefresh.until.get(refreshKey) || 0) > now;
     const bringup = typeof bringupButtons === 'function' ? bringupButtons(robot) : `<span class="pill ${robot.bringup === 'running' ? 'good' : 'neutral'}">${robot.bringup === 'running' ? '실행 중' : '실행 확인 안 됨'}</span>`;
-    return `<tr class="robot-row${highlighted ? ' just-updated' : ''}" data-row="${robot.id}"><td><button class="robot-identity" data-robot="${robot.id}" aria-label="${escapeHTML(displayRid(robot))} 상세 보기">${robotPicture(robot)}<span><strong>${escapeHTML(displayRid(robot))}</strong><code>${robot.ip}:${robot.port}</code><span class="row-update-label" aria-hidden="true">${svg('refresh')}조회 갱신 완료</span></span></button></td><td><span class="pill ${robot.needsAttention ? 'warning' : 'good'}"><i class="dot ${dotClass(robot)}"></i>${statusLabel(robot)}</span></td><td><span class="model-name">${escapeHTML(robot.modelLabel)}</span></td><td>${rosBadge(robot)}<span class="distro-name">${escapeHTML(robot.distro || '배포판 미확인')}</span></td><td><span class="runtime-label ${robot.activeRos === 'ros1' || robot.activeRos === 'ros2' ? 'running' : ''}">${svg(robot.activeRos === 'ros1' || robot.activeRos === 'ros2' ? 'check' : 'info')}${robot.activeRos === 'stopped' ? '실행 안 됨' : robot.activeRos === 'unknown' ? '확인 안 됨' : `${rosLabels[robot.activeRos]} 실행`}</span></td><td>${servicePill(robot.service)}</td><td>${bringup}</td><td>${batteryBadge(robot.battery, robot.id)}</td><td><div class="row-actions">${ioButton(robot)}<button class="table-detail" data-robot="${robot.id}" aria-label="${escapeHTML(displayRid(robot))} 자세히 보기">자세히 ${svg('arrow')}</button></div></td></tr>`;
+    return `<tr class="robot-row${highlighted ? ' just-updated' : ''}" data-row="${robot.id}"><td><button class="robot-identity" data-robot="${robot.id}" aria-label="${escapeHTML(displayRid(robot))} 상세 보기">${robotPicture(robot)}<span><strong>${escapeHTML(displayRid(robot))}</strong><code>${robot.ip}:${robot.port}</code><span class="row-update-label" aria-hidden="true">${svg('refresh')}조회 갱신 완료</span></span></button></td><td><span class="pill ${robot.needsAttention ? 'warning' : 'good'}"><i class="dot ${dotClass(robot)}"></i>${statusLabel(robot)}</span></td><td><span class="model-name">${escapeHTML(robot.modelLabel)}</span></td><td>${rosBadge(robot)}<span class="distro-name">${escapeHTML(robot.distro || '배포판 미확인')}</span></td><td><span class="runtime-label ${robot.activeRos === 'ros1' || robot.activeRos === 'ros2' ? 'running' : ''}">${svg(robot.activeRos === 'ros1' || robot.activeRos === 'ros2' ? 'check' : 'info')}${robot.activeRos === 'stopped' ? '실행 안 됨' : robot.activeRos === 'unknown' ? '확인 안 됨' : `${rosLabels[robot.activeRos]} 실행`}</span></td><td>${servicePill(robot.service)}</td><td>${bringup}</td><td>${batteryBadge(robot.battery, robot.id)}</td><td><div class="row-actions">${typeof jogButton === 'function' ? jogButton(robot) : ''}${ioButton(robot)}<button class="table-detail" data-robot="${robot.id}" aria-label="${escapeHTML(displayRid(robot))} 자세히 보기">자세히 ${svg('arrow')}</button></div></td></tr>`;
   }).join('');
   const table = $('robot-table');
   if (!table.rows) table.innerHTML = rows;
@@ -253,6 +254,7 @@ function detailRows(rows) { return rows.map(([label, value]) => `<dt>${label}</d
 function renderDetail() {
   const robot = state.snapshot.robots.find(item => item.id === state.selected);
   if (!robot) return;
+  if (state.drawerMode === 'jog') return renderJogDetail(robot);
   if (state.drawerMode === 'bringup') return renderBringupDetail(robot);
   if (state.drawerMode === 'io') return renderIoDetail(robot);
   $('drawer-title').textContent = displayRid(robot);
@@ -263,7 +265,7 @@ function renderDetail() {
     <div class="detail-top"><code>${robot.ip}:${robot.port}</code><span class="pill ${robot.needsAttention ? 'warning' : robot.reachability === 'reachable' ? 'good' : 'neutral'}"><i class="dot ${dotClass(robot)}"></i>${statusLabel(robot)}</span></div>
     <div class="detail-visual">${robotPicture(robot, true)}<div><div class="detail-title">${escapeHTML(robot.modelLabel)}</div><span class="detail-visual-caption">${rosLabels[robot.configuredRos]} · ${escapeHTML(robot.distro || '배포판 미확인')}</span></div></div><p class="detail-subtitle">${escapeHTML(robot.evidence)}</p>
     ${robot.issues.length ? `<div class="issue-list">${robot.issues.map(issue => `<p>${escapeHTML(issue)}</p>`).join('')}</div>` : ''}
-    <div class="detail-actions">${ioButton(robot, true)}</div>
+    <div class="detail-actions">${ioButton(robot, true)}${jogButton(robot)}</div>
     <section class="detail-section"><h3>배터리 ${batteryBadge(battery, robot.id)}</h3><dl>${detailRows([['잔량', batteryLabel(battery)], ['충전 상태', batteryChargeLabel(battery)], ['판정 근거', batteryChargeSource(battery)], ['BMS 상태값', batteryPowerLabels[battery?.powerSupplyStatus] || '미확인'], ['IO 충전 신호', battery?.ioCharging?.status === 'observed' ? battery.ioCharging.charging ? 'ON' : 'OFF' : '미확인'], ['신호 비교', battery?.chargingConflict ? '전류 / BMS / IO 정보가 다름' : '확인된 정보 기준'], ['전압', battery?.voltage != null ? `${battery.voltage.toFixed(2)} V` : '미확인'], ['전류', battery?.current != null ? `${battery.current.toFixed(2)} A` : '미확인'], ['조회 결과', batteryKnown(battery) ? '실제 배터리 메시지 수신' : batteryReasons[battery?.status] || batteryReasons.unavailable], ['확인 시각', battery?.observedAt ? timeLabel(battery.observedAt) : '미확인'], ['배터리 토픽', battery?.topic || '미확인'], ['IO 충전 토픽', battery?.ioCharging?.topic || '미확인']])}</dl></section>
     <section class="detail-section"><h3>로봇 식별 <small>등록값 / 실제 관측</small></h3><dl>${detailRows([['계획 RID', robot.plannedRid || '매핑 없음'], ['관측 RID', robot.observedRid || '미확인'], ['RID 일치', mismatch ? '불일치 · 확인 필요' : robot.observedRid && robot.plannedRid ? '일치' : '해당 없음 / 미확인'], ['hostname', d.hostname || '미확인'], ['운영체제', d.os?.PRETTY_NAME || '미확인'], ['모델 원문', robot.model || '미확인'], ['모델 출처', robot.sources?.model?.[0]?.source || '미확인'], ['RID 출처', robot.sources?.rid || '미확인']])}</dl></section>
     <section class="detail-section"><h3>ROS 설정과 실행 ${rosBadge(robot)}</h3><dl>${detailRows([['설정 ROS', rosLabels[robot.configuredRos]], ['배포판', robot.distro || '미확인'], ['실행 ROS', rosLabels[robot.activeRos]], ['설치 목록', d.installedDistros?.join(', ') || '미확인'], ['판정 근거', robot.sources?.ros || '미확인'], ['ROS 프로세스', d.processCount === undefined ? '미확인' : `${d.processCount}개 · graph 정상 여부는 별도`]])}</dl></section>
@@ -276,12 +278,13 @@ function openDetail(id, mode = 'detail') {
   if (!state.snapshot.robots.some(robot => robot.id === id)) return;
   stopIo();
   stopBringupPanel();
+  stopJogPanel();
   if (state.selected !== id) lastFocused = document.activeElement;
   state.chargeControl = mode === 'charge';
   if (state.chargeControl) mode = 'io';
   state.selected = id; state.drawerMode = mode;
-  $('detail-drawer').classList.toggle('io-mode', mode === 'io' || mode === 'bringup');
-  $('drawer-mode-label').textContent = mode === 'bringup' ? 'BRINGUP CONTROL · 켜기 / 끄기' : state.chargeControl ? 'CHARGE CONTROL · 충전 ON/OFF' : mode === 'io' ? 'IO CHECK · 상태 조회 / DO 제어' : 'ROBOT DETAILS · 상태 조회';
+  $('detail-drawer').classList.toggle('io-mode', mode === 'io' || mode === 'bringup' || mode === 'jog');
+  $('drawer-mode-label').textContent = mode === 'jog' ? 'JOG CONTROL · 로봇 조작' : mode === 'bringup' ? 'BRINGUP CONTROL · 켜기 / 끄기' : state.chargeControl ? 'CHARGE CONTROL · 충전 ON/OFF' : mode === 'io' ? 'IO CHECK · 상태 조회 / DO 제어' : 'ROBOT DETAILS · 상태 조회';
   $('drawer-refresh').innerHTML = `${svg('refresh')}${mode === 'io' ? 'IO 다시 연결' : '이 로봇 다시 조회'}`;
   $('drawer-refresh').disabled = false;
   renderDetail(); renderFleet();
@@ -289,14 +292,16 @@ function openDetail(id, mode = 'detail') {
   $('close-drawer').focus();
   if (mode === 'io') startIo();
   if (mode === 'bringup') startBringupPanel();
+  if (mode === 'jog') startJogPanel();
 }
 function closeDetail() {
+  stopJogPanel();
   stopBringupPanel();
   stopIo(); state.drawerMode = 'detail'; state.chargeControl = false; $('detail-drawer').classList.remove('io-mode');
   state.selected = null; $('drawer-backdrop').hidden = true; $('detail-drawer').hidden = true;
   renderFleet();
-  const id = lastFocused?.dataset?.bringup || lastFocused?.dataset?.charge || lastFocused?.dataset?.robot || lastFocused?.dataset?.io;
-  const attribute = lastFocused?.dataset?.bringup ? 'data-bringup' : lastFocused?.dataset?.charge ? 'data-charge' : lastFocused?.dataset?.io ? 'data-io' : 'data-robot';
+  const id = lastFocused?.dataset?.jog || lastFocused?.dataset?.bringup || lastFocused?.dataset?.charge || lastFocused?.dataset?.robot || lastFocused?.dataset?.io;
+  const attribute = lastFocused?.dataset?.jog ? 'data-jog' : lastFocused?.dataset?.bringup ? 'data-bringup' : lastFocused?.dataset?.charge ? 'data-charge' : lastFocused?.dataset?.io ? 'data-io' : 'data-robot';
   const card = id ? [...document.querySelectorAll(`[${attribute}="${id}"]`)].find(el => el.getClientRects().length) : lastFocused;
   card?.focus();
 }
@@ -379,7 +384,7 @@ async function init() {
   };
   const holdFleet = event => {
     if (event.type === 'keydown' && ![' ', 'Enter'].includes(event.key)) return;
-    if (event.target.closest('#robot-table [data-charge], #robot-table [data-io], #robot-table [data-robot], #robot-table [data-bringup]')) state.fleetInteraction = {};
+    if (event.target.closest('#robot-table [data-charge], #robot-table [data-io], #robot-table [data-robot], #robot-table [data-bringup], #robot-table [data-jog]')) state.fleetInteraction = {};
   };
   document.addEventListener('pointerdown', holdFleet, true);
   document.addEventListener('keydown', holdFleet, true);
@@ -396,7 +401,7 @@ async function init() {
   $('model-filter').addEventListener('change', event => { state.model = event.target.value; renderFleet(); });
   $('reset-filters').onclick = resetFilters; $('empty-reset').onclick = resetFilters;
   $('close-drawer').onclick = closeDetail; $('drawer-backdrop').onclick = closeDetail;
-  $('refresh-button').onclick = () => refreshLive(); $('drawer-refresh').onclick = () => state.drawerMode === 'bringup' ? fetchBringupStatus() : state.drawerMode === 'io' ? fetchIo() : refreshLive(state.selected);
+  $('refresh-button').onclick = () => refreshLive(); $('drawer-refresh').onclick = () => state.drawerMode === 'jog' ? (stopJogPanel(), renderDetail(), startJogPanel()) : state.drawerMode === 'bringup' ? fetchBringupStatus() : state.drawerMode === 'io' ? fetchIo() : refreshLive(state.selected);
   $('export-button').onclick = exportCSV;
   $('auto-refresh').onchange = async event => {
     state.follow = event.target.checked;
