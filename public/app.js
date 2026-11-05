@@ -1,5 +1,5 @@
 'use strict';
-const state = { snapshot: null, ros: 'all', model: 'all', search: '', page: 'overview', selected: null, refreshing: false, lastObserved: new Map(), initialized: false };
+const state = { snapshot: null, ros: 'all', model: 'all', search: '', includeUnconfirmed: false, page: 'overview', selected: null, refreshing: false, lastObserved: new Map(), initialized: false };
 const rowRefresh = { until: new Map(), timer: null };
 const ROW_REFRESH_MS = 1800;
 const $ = id => document.getElementById(id);
@@ -128,11 +128,17 @@ function toast(message) {
 }
 function timeLabel(iso) { return new Date(iso).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }); }
 function rosBadge(robot) { return `<span class="ros-badge ${robot.configuredRos}">${rosLabels[robot.configuredRos]}</span>`; }
-function statusLabel(robot) { return robot.quality === 'pending' ? '조회 대기' : robot.quality === 'stale' ? '정보 오래됨' : robot.ssh === 'auth_failed' ? '인증 필요' : robot.ssh === 'host_key_unknown' ? '키 미등록' : robot.ssh === 'host_key_mismatch' ? '키 불일치' : robot.needsAttention ? '확인 필요' : robot.ssh === 'connected' ? '연결됨' : reachLabels[robot.reachability]; }
+function statusLabel(robot) {
+  const failures = { timeout: 'SSH 시간 초과', no_route: '네트워크 경로 없음', connection_refused: 'SSH 접속 거부',
+    auth_failed: '인증 필요', host_key_unknown: '키 미등록', host_key_mismatch: '키 불일치',
+    credentials_invalid: 'SSH 설정 확인', probe_failed: '상세 조회 실패', connection_error: 'SSH 연결 실패' };
+  return robot.quality === 'pending' ? '조회 대기' : robot.quality === 'stale' ? '정보 오래됨'
+    : failures[robot.ssh] || (robot.needsAttention ? '확인 필요' : robot.ssh === 'connected' ? '연결됨' : reachLabels[robot.reachability]);
+}
 function dotClass(robot) { return robot.needsAttention ? 'warning' : robot.reachability === 'reachable' ? 'good' : robot.reachability === 'unreachable' ? 'offline' : 'neutral'; }
 function filteredRobots() {
   const search = state.search.trim().toLowerCase();
-  return observedRobots().filter(robot => {
+  return (state.includeUnconfirmed ? state.snapshot.robots : observedRobots()).filter(robot => {
     if (state.ros !== 'all' && robot.configuredRos !== state.ros) return false;
     if (state.model !== 'all' && robot.modelLabel !== state.model) return false;
     return !search || [robot.id, robot.ip, robot.modelLabel, robot.model, robot.distro, robot.observedRid].some(value => String(value || '').toLowerCase().includes(search));
@@ -179,6 +185,20 @@ function renderFleet() {
   const focusedSelector = focused?.dataset?.jog ? `[data-jog="${focused.dataset.jog}"]` : focused?.dataset?.bringup ? `[data-bringup="${focused.dataset.bringup}"]` : focused?.dataset?.charge ? `[data-charge="${focused.dataset.charge}"]` : focused?.dataset?.io ? `[data-io="${focused.dataset.io}"]`
     : focused?.dataset?.robot ? `[data-robot="${focused.dataset.robot}"].${focused.classList.contains('robot-identity') ? 'robot-identity' : 'table-detail'}` : null;
   const robots = filteredRobots();
+  const successful = observedRobots().length, total = state.snapshot.robots.length;
+  const noSuccess = !state.includeUnconfirmed && successful === 0 && total > 0;
+  const completed = state.snapshot.collector?.initialCompleted ?? total;
+  $('include-unconfirmed').checked = state.includeUnconfirmed;
+  $('unconfirmed-count').textContent = total - successful;
+  $('fleet-list-hint').textContent = state.includeUnconfirmed ? '미확인·접속 실패·대기 대상을 포함합니다.' : '현재 SSH 조회에 성공한 로봇';
+  $('fleet-list-note').textContent = state.includeUnconfirmed ? 'SSH 조회 실패는 전원 OFF를 뜻하지 않습니다. 상세에서 최근 조회 시각과 원인을 확인하세요.' : '현재 조회 실패 또는 오래된 정보는 목록에서 제외합니다.';
+  $('empty-state-title').textContent = noSuccess ? completed < total ? '첫 조회 진행 중' : 'SSH 조회 성공 0대' : '조회 결과 없음';
+  $('empty-state-description').textContent = noSuccess
+    ? completed < total ? `전체 ${total}대 중 ${completed}대 확인했습니다. 미확인 대상을 열어 진행 상태를 확인하세요.`
+      : `전체 ${total}대를 조회했지만 현재 SSH로 정보를 읽은 로봇이 없습니다. 미확인 대상을 열어 시간 초과·접속 거부 등의 원인과 최근 조회 시각을 확인하세요.`
+    : '현재 조건에 해당하는 로봇이 없습니다. 검색 조건과 대상 IP 범위를 확인하세요.';
+  $('empty-show-targets').hidden = !noSuccess;
+  $('empty-reset').hidden = noSuccess;
   $('visible-count').textContent = robots.length;
   $('reset-filters').hidden = state.ros === 'all' && state.model === 'all' && !state.search;
   $('table-container').hidden = !robots.length;
@@ -400,6 +420,8 @@ async function init() {
   $('ros-filter').addEventListener('change', event => { state.ros = event.target.value; renderFleet(); });
   $('model-filter').addEventListener('change', event => { state.model = event.target.value; renderFleet(); });
   $('reset-filters').onclick = resetFilters; $('empty-reset').onclick = resetFilters;
+  $('include-unconfirmed').onchange = event => { state.includeUnconfirmed = event.target.checked; renderFleet(); };
+  $('empty-show-targets').onclick = () => { state.includeUnconfirmed = true; resetFilters(); };
   $('close-drawer').onclick = closeDetail; $('drawer-backdrop').onclick = closeDetail;
   $('refresh-button').onclick = () => refreshLive(); $('drawer-refresh').onclick = () => state.drawerMode === 'jog' ? (stopJogPanel(), renderDetail(), startJogPanel()) : state.drawerMode === 'bringup' ? fetchBringupStatus() : state.drawerMode === 'io' ? fetchIo() : refreshLive(state.selected);
   $('export-button').onclick = exportCSV;

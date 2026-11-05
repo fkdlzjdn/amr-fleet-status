@@ -75,3 +75,5 @@ main{padding:30px 38px 16px;max-width:1780px;margin:auto}.page-heading{display:f
 
 /* Hold-to-run keyboard mapping. */
 .jog-keyboard-hint{font-size:11px;line-height:1.9;color:var(--muted);margin:12px 0}.jog-keyboard-hint kbd,.jog-pad button kbd{font:600 11px/1.2 ui-monospace,SFMono-Regular,Consolas,monospace;padding:2px 5px;border:1px solid currentColor;border-radius:4px;opacity:.8}.jog-pad button kbd{font-size:10px;min-width:22px}
+
+.include-unconfirmed{display:flex;align-items:center;gap:6px;font-size:11px;color:#5b765e;white-space:nowrap;cursor:pointer}.include-unconfirmed input{accent-color:#2c7757;width:14px;height:14px;margin:0}.include-unconfirmed span{padding:2px 5px;background:#eff2e8;border-radius:5px;font-size:10px}.empty-state p{max-width:640px;margin-left:auto;margin-right:auto;line-height:1.9}.board-footer #fleet-list-note{line-height:1.7}
